@@ -41,64 +41,52 @@ serve(async (req) => {
     const response = await fetch(resumeUrl);
     const text = await response.text();
 
-    // Initialize AI providers
+    // Initialize Gemini AI
     const geminiKey = Deno.env.get('GEMINI_API_KEY');
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-    let parsedData: ParsedResume | null = null;
-
-    // Try Google Gemini first
-    if (geminiKey) {
-      try {
-        const genAI = new GoogleGenerativeAI(geminiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
-        const prompt = `Analyze this resume text and extract the following information in JSON format:
-        - Top 5-10 technical skills
-        - Total years of experience
-        - Expected/current salary range (if mentioned)
-        - Preferred job location or willing to relocate information
-        - Educational qualifications
-        - Current/Last job title
-        - Industry expertise
-        - Languages known
-        - Certifications
-        - Preferred work type (remote/hybrid/onsite) if mentioned
-        - Immediate availability or notice period if mentioned
-        - Key achievements or notable projects
-
-        Return as JSON with this structure:
-        {
-          "skills": [],
-          "experience": "",
-          "salary": "",
-          "location": "",
-          "education": [],
-          "jobTitle": "",
-          "industries": [],
-          "languages": [],
-          "certifications": [],
-          "preferredWorkType": "",
-          "availability": "",
-          "achievements": []
-        }`;
-
-        const result = await model.generateContent([text, prompt]);
-        const response = await result.response;
-        parsedData = JSON.parse(response.text());
-      } catch (error) {
-        console.error('Gemini API error:', error);
-      }
+    if (!geminiKey) {
+      throw new Error('Gemini API key not configured');
     }
 
-    // If Gemini fails, try Anthropic (future implementation)
-    if (!parsedData && anthropicKey) {
-      // Anthropic implementation would go here
-      // This is a placeholder for future implementation
-    }
+    const genAI = new GoogleGenerativeAI(geminiKey);
+    // Use gemini-pro model which is available in the free tier
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    if (!parsedData) {
-      throw new Error('Failed to parse resume with available AI providers');
-    }
+    const prompt = `Analyze this resume text and extract the following information in JSON format:
+      - Top 5-10 technical skills
+      - Total years of experience
+      - Expected/current salary range (if mentioned)
+      - Preferred job location or willing to relocate information
+      - Educational qualifications
+      - Current/Last job title
+      - Industry expertise
+      - Languages known
+      - Certifications
+      - Preferred work type (remote/hybrid/onsite) if mentioned
+      - Immediate availability or notice period if mentioned
+      - Key achievements or notable projects
+
+      Return as JSON with this structure:
+      {
+        "skills": [],
+        "experience": "",
+        "salary": "",
+        "location": "",
+        "education": [],
+        "jobTitle": "",
+        "industries": [],
+        "languages": [],
+        "certifications": [],
+        "preferredWorkType": "",
+        "availability": "",
+        "achievements": []
+      }`;
+
+    // Use the free tier with safety settings
+    const result = await model.generateContent([text, prompt]);
+    const response = await result.response;
+    const parsedData = JSON.parse(response.text()) as ParsedResume;
+
+    console.log('Resume parsed successfully:', parsedData);
 
     // Update resume record with parsed data
     const { error: updateError } = await supabase
@@ -106,7 +94,7 @@ serve(async (req) => {
       .update({
         extracted_skills: parsedData.skills,
         status: 'processed',
-        parsed_data: parsedData  // This will require a database schema update
+        parsed_data: parsedData
       })
       .eq('id', resumeId);
 
@@ -128,7 +116,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in parse-resume function:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
