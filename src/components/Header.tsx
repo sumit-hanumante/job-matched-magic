@@ -3,6 +3,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
+import { User2 } from "lucide-react";
 
 const Header = () => {
   const { user } = useAuth();
@@ -22,15 +23,22 @@ const Header = () => {
   };
 
   return (
-    <header className="border-b">
+    <header className="border-b bg-white/50 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">Job Matcher</h1>
+        <h1 className="text-xl font-bold text-primary">Job Matcher</h1>
         {user ? (
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {user.email}
-            </span>
-            <Button variant="outline" onClick={handleSignOut}>
+            <div className="flex items-center gap-2">
+              <User2 className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium">
+                {user.user_metadata?.full_name || user.email?.split('@')[0]}
+              </span>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={handleSignOut}
+              className="hover:bg-destructive hover:text-destructive-foreground"
+            >
               Sign Out
             </Button>
           </div>
