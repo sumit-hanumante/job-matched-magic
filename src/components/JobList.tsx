@@ -7,92 +7,115 @@ import { supabase } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface JobListProps {
   jobs?: Job[];
 }
 
+const INITIAL_JOB_LIMIT = 20;
 const DAILY_JOB_LIMIT = 10;
 
 const JobList = ({ jobs: propJobs }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScrapingJobs, setIsScrapingJobs] = useState(false);
+  const [hasResume, setHasResume] = useState(false);
   const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const handleScrapeJobs = async () => {
-    try {
-      setIsScrapingJobs(true);
+  const checkForResume = async () => {
+    if (!user) return false;
+    
+    const { data } = await supabase
+      .from('resumes')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    return !!data;
+  };
+
+  const handleJobClick = (job: Job) => {
+    if (!user) {
+      // Save the job to localStorage to redirect back after login
+      localStorage.setItem('lastViewedJob', job.id);
       toast({
-        title: "Starting job scraping...",
-        description: "This may take a few minutes"
+        title: "Sign in required",
+        description: "Please sign in or create an account to view job details",
       });
-
-      const { data, error } = await supabase.functions.invoke('scrape-jobs');
-      
-      if (error) throw error;
-
-      // Fetch the newly scraped jobs immediately
-      const { data: newJobs, error: fetchError } = await supabase
-        .from('jobs')
-        .select('*')
-        .order('posted_date', { ascending: false });
-
-      if (fetchError) throw fetchError;
-
-      // Transform and set the jobs
-      const transformedJobs = newJobs.map(job => ({
-        ...job,
-        matchScore: 0, // For testing, set match score to 0
-        postedDate: new Date(job.posted_date).toISOString().split('T')[0],
-        applyUrl: job.apply_url,
-        salaryRange: job.salary_range,
-        lastScrapedAt: job.last_scraped_at
-      }));
-
-      setJobs(transformedJobs);
-      
-      toast({
-        title: "Success!",
-        description: `${transformedJobs.length} jobs fetched successfully`
-      });
-      
-    } catch (error) {
-      console.error('Error scraping jobs:', error);
-      toast({
-        title: "Error",
-        description: "Failed to scrape jobs. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsScrapingJobs(false);
+      navigate('/auth');
+      return;
     }
+
+    // If user is logged in but hasn't uploaded resume
+    if (!hasResume) {
+      toast({
+        title: "Resume required",
+        description: "Please upload your resume to get personalized job matches",
+      });
+      // Scroll to resume upload section
+      document.getElementById('upload')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    // Open job application URL
+    window.open(job.applyUrl, '_blank');
   };
 
   const fetchJobs = async () => {
     try {
       if (!user) {
+        // For non-authenticated users, show random selection of latest jobs
         const { data: jobsData, error: jobsError } = await supabase
           .from('jobs')
           .select('*')
-          .order('posted_date', { ascending: false });
+          .order('posted_date', { ascending: false })
+          .limit(INITIAL_JOB_LIMIT);
 
         if (jobsError) throw jobsError;
 
-        setJobs(jobsData?.map(job => ({
+        const transformedJobs = jobsData?.map(job => ({
           ...job,
           matchScore: 0,
           postedDate: new Date(job.posted_date).toISOString().split('T')[0],
           applyUrl: job.apply_url,
           salaryRange: job.salary_range,
           lastScrapedAt: job.last_scraped_at
-        })) || []);
-        
-        setIsLoading(false);
+        })) || [];
+
+        setJobs(transformedJobs);
         return;
       }
 
-      // For authenticated users, fetch unshown matches first
+      // Check if user has uploaded resume
+      const hasUploadedResume = await checkForResume();
+      setHasResume(hasUploadedResume);
+
+      if (!hasUploadedResume) {
+        // Show random selection of jobs for users without resume
+        const { data: randomJobs, error: randomError } = await supabase
+          .from('jobs')
+          .select('*')
+          .order('posted_date', { ascending: false })
+          .limit(DAILY_JOB_LIMIT);
+
+        if (randomError) throw randomError;
+
+        const transformedJobs = randomJobs?.map(job => ({
+          ...job,
+          matchScore: 0,
+          postedDate: new Date(job.posted_date).toISOString().split('T')[0],
+          applyUrl: job.apply_url,
+          salaryRange: job.salary_range,
+          lastScrapedAt: job.last_scraped_at
+        })) || [];
+
+        setJobs(transformedJobs);
+        return;
+      }
+
+      // For users with resume, show matched jobs
       const { data: matchesData, error: matchesError } = await supabase
         .from('job_matches')
         .select('*, jobs(*)')
@@ -190,16 +213,22 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
           {jobs.length} jobs found, last updated {" "}
           {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
         </p>
-        <Button 
-          onClick={handleScrapeJobs}
-          disabled={isScrapingJobs}
-        >
-          {isScrapingJobs ? "Scraping Jobs..." : "Scrape New Jobs"}
-        </Button>
+        {user && (
+          <Button 
+            onClick={() => fetchJobs()}
+            variant="outline"
+          >
+            Refresh Jobs
+          </Button>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {jobs.map((job) => (
-          <JobCard key={job.id} job={job} />
+          <JobCard 
+            key={job.id} 
+            job={job} 
+            onClick={() => handleJobClick(job)}
+          />
         ))}
       </div>
     </div>

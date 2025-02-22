@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 
 interface JobCardProps {
   job: Job;
+  onClick?: () => void;
 }
 
-const JobCard = ({ job }: JobCardProps) => {
+const JobCard = ({ job, onClick }: JobCardProps) => {
   return (
     <div className="glass-card p-6 rounded-lg transition-all duration-300 hover:shadow-xl slide-up">
       <div className="flex justify-between items-start mb-4">
@@ -19,19 +20,14 @@ const JobCard = ({ job }: JobCardProps) => {
           <p className="text-sm text-muted-foreground">{job.company}</p>
         </div>
         <Button
-          asChild
+          onClick={onClick}
           className="bg-primary hover:bg-primary/90 text-white"
           size="sm"
         >
-          <a
-            href={job.applyUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-1"
-          >
+          <span className="inline-flex items-center gap-1">
             Apply Now
             <ArrowUpRight className="h-4 w-4" />
-          </a>
+          </span>
         </Button>
       </div>
       
