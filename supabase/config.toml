@@ -1,1 +1,18 @@
+
 project_id = "tagvfszjeylodebvmtln"
+# Select the authentication schema
+# Can be either 'jwt' or 'aws'
+schema = "jwt"
+
+[[edge_functions]]
+name = "parse-resume"
+verify_jwt = true
+
+[[edge_functions]]
+name = "scrape-jobs"
+verify_jwt = true
+schedule = "0 */4 * * *"  # Run every 4 hours
+
+[[edge_functions]]
+name = "cleanup-jobs"
+verify_jwt = true
