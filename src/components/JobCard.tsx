@@ -37,8 +37,8 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
     : cleanDescription;
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 h-[400px] flex flex-col justify-between overflow-hidden">
-      <div className="space-y-4 overflow-hidden">
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 h-full flex flex-col justify-between">
+      <div className="space-y-4">
         <div className="flex items-center gap-2">
           <span className="inline-block px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full">
             {Math.round(job.matchScore)}% Match
@@ -48,7 +48,7 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
           </span>
         </div>
         
-        <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 min-h-[3.5rem]">
+        <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
           {job.title}
         </h3>
         
@@ -74,7 +74,7 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
         </p>
       </div>
       
-      <div className="space-y-4">
+      <div className="pt-4 mt-4 border-t space-y-4">
         {job.requirements && job.requirements.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {job.requirements.slice(0, 3).map((req, index) => (
@@ -95,12 +95,13 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
         
         <Button
           onClick={onClick}
-          className="w-full bg-primary hover:bg-primary/90 text-white"
+          variant="outline"
           size="sm"
+          className="w-full group hover:border-primary"
         >
           <span className="inline-flex items-center gap-1">
             Apply Now
-            <ArrowUpRight className="h-4 w-4" />
+            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </span>
         </Button>
       </div>

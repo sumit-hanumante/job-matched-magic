@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 
@@ -107,6 +106,54 @@ async function scrapeLinkedinJobs(): Promise<Job[]> {
   }
 }
 
+async function scrapeGoogleJobs(): Promise<Job[]> {
+  console.log('Scraping Google jobs...');
+  try {
+    // Implementation for Google Jobs API
+    // This is just a placeholder since we need the actual API key and implementation
+    return [];
+  } catch (error) {
+    console.error('Error scraping Google jobs:', error);
+    return [];
+  }
+}
+
+async function scrapeAmazonJobs(): Promise<Job[]> {
+  console.log('Scraping Amazon jobs...');
+  try {
+    // Implementation for Amazon Jobs API
+    // This is just a placeholder since we need the actual API implementation
+    return [];
+  } catch (error) {
+    console.error('Error scraping Amazon jobs:', error);
+    return [];
+  }
+}
+
+async function scrapeMicrosoftJobs(): Promise<Job[]> {
+  console.log('Scraping Microsoft jobs...');
+  try {
+    // Implementation for Microsoft Jobs API
+    // This is just a placeholder since we need the actual API implementation
+    return [];
+  } catch (error) {
+    console.error('Error scraping Microsoft jobs:', error);
+    return [];
+  }
+}
+
+async function scrapeAppleJobs(): Promise<Job[]> {
+  console.log('Scraping Apple jobs...');
+  try {
+    // Implementation for Apple Jobs API
+    // This is just a placeholder since we need the actual API implementation
+    return [];
+  } catch (error) {
+    console.error('Error scraping Apple jobs:', error);
+    return [];
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -122,15 +169,34 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    console.log('Starting job scraping...');
+    console.log('Starting job scraping from all sources...');
 
-    // Scrape jobs from multiple sources in parallel, excluding RemoteOK
-    const [githubJobs, linkedinJobs] = await Promise.all([
+    // Scrape jobs from all sources in parallel, excluding RemoteOK
+    const [
+      githubJobs,
+      linkedinJobs,
+      googleJobs,
+      amazonJobs,
+      microsoftJobs,
+      appleJobs
+    ] = await Promise.all([
       scrapeGithubJobs(),
-      scrapeLinkedinJobs()
+      scrapeLinkedinJobs(),
+      scrapeGoogleJobs(),
+      scrapeAmazonJobs(),
+      scrapeMicrosoftJobs(),
+      scrapeAppleJobs()
     ]);
 
-    const allJobs = [...githubJobs, ...linkedinJobs];
+    const allJobs = [
+      ...githubJobs,
+      ...linkedinJobs,
+      ...googleJobs,
+      ...amazonJobs,
+      ...microsoftJobs,
+      ...appleJobs
+    ];
+
     console.log(`Found ${allJobs.length} jobs in total`);
 
     // Clean up job descriptions
@@ -165,6 +231,10 @@ serve(async (req) => {
         jobCounts: {
           github: githubJobs.length,
           linkedin: linkedinJobs.length,
+          google: googleJobs.length,
+          amazon: amazonJobs.length,
+          microsoft: microsoftJobs.length,
+          apple: appleJobs.length,
           total: allJobs.length
         }
       }),

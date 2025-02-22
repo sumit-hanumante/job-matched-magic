@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -93,8 +92,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         const { data: jobsData, error: jobsError } = await supabase
           .from('jobs')
           .select('*')
-          .order('posted_date', { ascending: false })
-          .limit(INITIAL_JOB_LIMIT);
+          .order('posted_date', { ascending: false });
 
         if (jobsError) throw jobsError;
 
@@ -118,8 +116,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         const { data: randomJobs, error: randomError } = await supabase
           .from('jobs')
           .select('*')
-          .order('posted_date', { ascending: false })
-          .limit(DAILY_JOB_LIMIT);
+          .order('posted_date', { ascending: false });
 
         if (randomError) throw randomError;
 

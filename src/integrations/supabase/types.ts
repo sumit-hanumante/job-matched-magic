@@ -133,8 +133,11 @@ export type Database = {
       }
       resumes: {
         Row: {
+          content_type: string | null
           experience: string | null
           extracted_skills: string[] | null
+          file_name: string | null
+          file_path: string | null
           id: string
           max_salary: number | null
           min_salary: number | null
@@ -142,11 +145,15 @@ export type Database = {
           preferred_locations: string[] | null
           preferred_work_type: string | null
           salary: string | null
+          status: string | null
           user_id: string
         }
         Insert: {
+          content_type?: string | null
           experience?: string | null
           extracted_skills?: string[] | null
+          file_name?: string | null
+          file_path?: string | null
           id?: string
           max_salary?: number | null
           min_salary?: number | null
@@ -154,11 +161,15 @@ export type Database = {
           preferred_locations?: string[] | null
           preferred_work_type?: string | null
           salary?: string | null
+          status?: string | null
           user_id: string
         }
         Update: {
+          content_type?: string | null
           experience?: string | null
           extracted_skills?: string[] | null
+          file_name?: string | null
+          file_path?: string | null
           id?: string
           max_salary?: number | null
           min_salary?: number | null
@@ -166,6 +177,7 @@ export type Database = {
           preferred_locations?: string[] | null
           preferred_work_type?: string | null
           salary?: string | null
+          status?: string | null
           user_id?: string
         }
         Relationships: []
