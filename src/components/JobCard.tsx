@@ -23,15 +23,23 @@ const sourceColors: { [key: string]: string } = {
 const JobCard = ({ job, onClick }: JobCardProps) => {
   const sourceColor = sourceColors[job.source.toLowerCase()] || sourceColors.default;
   
-  // Limit description to roughly 4 lines (assuming average of 60 chars per line)
-  const truncatedDescription = job.description.length > 240 
-    ? job.description.slice(0, 240).trim() + '...'
-    : job.description;
+  // Strip HTML tags and decode HTML entities
+  const stripHtml = (html: string) => {
+    const temp = document.createElement("div");
+    temp.innerHTML = html;
+    return temp.textContent || temp.innerText || "";
+  };
+  
+  // Clean and truncate description
+  const cleanDescription = stripHtml(job.description);
+  const truncatedDescription = cleanDescription.length > 200 
+    ? cleanDescription.slice(0, 200).trim() + '...'
+    : cleanDescription;
 
   return (
-    <div className="glass-card p-6 rounded-lg transition-all duration-300 hover:shadow-xl slide-up h-[380px] flex flex-col justify-between">
-      <div>
-        <div className="flex items-center gap-2 mb-2">
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 h-[400px] flex flex-col justify-between overflow-hidden">
+      <div className="space-y-4 overflow-hidden">
+        <div className="flex items-center gap-2">
           <span className="inline-block px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full">
             {Math.round(job.matchScore)}% Match
           </span>
@@ -40,37 +48,39 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
           </span>
         </div>
         
-        <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">{job.title}</h3>
+        <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 min-h-[3.5rem]">
+          {job.title}
+        </h3>
         
-        <div className="space-y-1 mb-4">
-          <p className="text-sm text-muted-foreground flex items-center gap-1">
-            <Building2 className="h-4 w-4" />
-            {job.company}
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
+            <Building2 className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{job.company}</span>
           </p>
-          <p className="text-sm text-muted-foreground flex items-center gap-1">
-            <MapPin className="h-4 w-4" />
-            {job.location}
+          <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
+            <MapPin className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{job.location}</span>
           </p>
           {job.salaryRange && (
-            <p className="text-sm text-muted-foreground flex items-center gap-1">
-              <DollarSign className="h-4 w-4" />
-              {job.salaryRange}
+            <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
+              <DollarSign className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">{job.salaryRange}</span>
             </p>
           )}
         </div>
         
-        <p className="text-sm text-gray-600 mb-4 line-clamp-4">
+        <p className="text-sm text-gray-600 line-clamp-3">
           {truncatedDescription}
         </p>
       </div>
       
-      <div>
+      <div className="space-y-4">
         {job.requirements && job.requirements.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap gap-2">
             {job.requirements.slice(0, 3).map((req, index) => (
               <span 
                 key={index}
-                className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full"
+                className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full truncate max-w-[150px]"
               >
                 {req}
               </span>
