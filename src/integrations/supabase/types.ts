@@ -43,36 +43,48 @@ export type Database = {
       }
       jobs: {
         Row: {
+          applicant_count: number | null
           apply_url: string
           company: string
           description: string
+          external_job_id: string | null
           id: string
+          last_scraped_at: string | null
           location: string
           posted_date: string | null
           requirements: string[] | null
           salary_range: string | null
+          source: string
           title: string
         }
         Insert: {
+          applicant_count?: number | null
           apply_url: string
           company: string
           description: string
+          external_job_id?: string | null
           id?: string
+          last_scraped_at?: string | null
           location: string
           posted_date?: string | null
           requirements?: string[] | null
           salary_range?: string | null
+          source?: string
           title: string
         }
         Update: {
+          applicant_count?: number | null
           apply_url?: string
           company?: string
           description?: string
+          external_job_id?: string | null
           id?: string
+          last_scraped_at?: string | null
           location?: string
           posted_date?: string | null
           requirements?: string[] | null
           salary_range?: string | null
+          source?: string
           title?: string
         }
         Relationships: []
