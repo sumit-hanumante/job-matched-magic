@@ -20,55 +20,37 @@ interface Job {
   external_job_id?: string;
 }
 
-async function scrapeGithubJobs(): Promise<Job[]> {
-  console.log('Scraping Github jobs...');
-  try {
-    const response = await fetch('https://jobs.github.com/positions.json');
-    if (!response.ok) throw new Error('Failed to fetch Github jobs');
-    
-    const data = await response.json();
-    return data.map((job: any) => ({
-      title: job.title,
-      company: job.company,
-      location: job.location,
-      description: job.description,
-      apply_url: job.url,
-      source: 'github',
-      external_job_id: `gh_${job.id}`,
-      requirements: extractRequirements(job.description),
-      salary_range: extractSalaryRange(job.description)
-    }));
-  } catch (error) {
-    console.error('Error scraping Github jobs:', error);
-    return [];
-  }
-}
-
 async function scrapeRemoteOkJobs(): Promise<Job[]> {
   console.log('Scraping RemoteOK jobs...');
   try {
-    const response = await fetch('https://remoteok.io/api', {
+    const response = await fetch('https://remoteok.com/api', {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json'
       }
     });
     
-    if (!response.ok) throw new Error('Failed to fetch RemoteOK jobs');
+    if (!response.ok) {
+      console.error('RemoteOK API error:', response.status, response.statusText);
+      throw new Error('Failed to fetch RemoteOK jobs');
+    }
     
     const data = await response.json();
+    console.log('RemoteOK raw response:', JSON.stringify(data).slice(0, 200) + '...');
+    
     // Remove the first item as it's usually metadata
-    const jobs = data.slice(1);
+    const jobs = Array.isArray(data) ? data.slice(1) : [];
     
     return jobs.map((job: any) => ({
-      title: job.position,
-      company: job.company,
+      title: job.position || job.title || 'Unknown Position',
+      company: job.company || 'Unknown Company',
       location: job.location || 'Remote',
-      description: job.description,
-      apply_url: job.url,
+      description: job.description || '',
+      apply_url: job.url || job.apply_url || '',
       source: 'remoteok',
       external_job_id: `rok_${job.id}`,
-      requirements: extractRequirements(job.description),
-      salary_range: job.salary || extractSalaryRange(job.description)
+      requirements: extractRequirements(job.description || ''),
+      salary_range: job.salary || extractSalaryRange(job.description || '')
     }));
   } catch (error) {
     console.error('Error scraping RemoteOK jobs:', error);
@@ -78,6 +60,8 @@ async function scrapeRemoteOkJobs(): Promise<Job[]> {
 
 function extractRequirements(description: string): string[] {
   const requirements: string[] = [];
+  
+  if (!description) return requirements;
   
   // Common requirement indicators
   const requirementPatterns = [
@@ -111,6 +95,8 @@ function extractRequirements(description: string): string[] {
 }
 
 function extractSalaryRange(description: string): string | undefined {
+  if (!description) return undefined;
+  
   const salaryPatterns = [
     /\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*-\s*\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/i,
     /(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*k\s*-\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*k/i,
@@ -133,10 +119,12 @@ function extractSalaryRange(description: string): string | undefined {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('Starting job scraping process...');
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -146,28 +134,22 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    console.log('Starting job scraping process...');
+    // Scrape jobs from RemoteOK
+    const remoteOkJobs = await scrapeRemoteOkJobs();
+    console.log(`Found ${remoteOkJobs.length} RemoteOK jobs`);
 
-    // Scrape jobs from all sources in parallel
-    const [githubJobs, remoteOkJobs] = await Promise.all([
-      scrapeGithubJobs(),
-      scrapeRemoteOkJobs()
-    ]);
-
-    const allJobs = [...githubJobs, ...remoteOkJobs];
-
-    console.log(`Found ${allJobs.length} jobs in total`);
+    const allJobs = [...remoteOkJobs];
 
     // Insert new jobs into the database
     if (allJobs.length > 0) {
       // First, mark old jobs as expired
-      const sixtyDaysAgo = new Date();
-      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
       await supabase
         .from('jobs')
         .delete()
-        .lt('posted_date', sixtyDaysAgo.toISOString());
+        .lt('posted_date', thirtyDaysAgo.toISOString());
 
       // Insert new jobs
       const { data: newJobs, error } = await supabase
@@ -184,9 +166,12 @@ serve(async (req) => {
           }
         );
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error upserting jobs:', error);
+        throw error;
+      }
 
-      console.log(`Successfully inserted/updated ${newJobs?.length || 0} jobs`);
+      console.log(`Successfully inserted/updated jobs. New jobs count: ${newJobs?.length || 0}`);
     }
 
     return new Response(
@@ -194,18 +179,25 @@ serve(async (req) => {
         success: true, 
         message: `Successfully scraped and processed ${allJobs.length} jobs`,
         jobCounts: {
-          github: githubJobs.length,
           remoteok: remoteOkJobs.length,
           total: allJobs.length
         }
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 200,
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
     );
 
   } catch (error) {
     console.error('Error in scrape-jobs function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
