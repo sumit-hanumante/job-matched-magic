@@ -5,7 +5,6 @@ verify_jwt = true
 
 [functions.scrape-jobs]
 verify_jwt = true
-schedule = "0 */4 * * *"
 
 [functions.cleanup-jobs]
 verify_jwt = true
