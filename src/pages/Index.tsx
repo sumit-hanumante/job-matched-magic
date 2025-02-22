@@ -14,20 +14,20 @@ const Index = () => {
       <Header />
       <Hero />
       
-      <main className="container mx-auto px-4 py-16 space-y-16">
+      <main className="container mx-auto px-4 py-32 space-y-32">
         {!user ? (
-          <section id="auth" className="scroll-mt-16">
+          <section id="auth" className="scroll-mt-32">
             <h2 className="text-3xl font-bold text-center mb-8">Get Started</h2>
             <Auth />
           </section>
         ) : (
           <>
-            <section id="upload" className="scroll-mt-16">
+            <section id="upload" className="scroll-mt-32">
               <h2 className="text-3xl font-bold text-center mb-8">Upload Your Resume</h2>
               <ResumeUpload />
             </section>
 
-            <section id="matches" className="scroll-mt-16">
+            <section id="matches" className="scroll-mt-32">
               <div className="text-center mb-12">
                 <h2 className="text-3xl font-bold mb-4">Your Job Matches</h2>
                 <p className="text-muted-foreground max-w-2xl mx-auto">
