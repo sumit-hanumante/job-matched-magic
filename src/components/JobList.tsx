@@ -38,7 +38,6 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
 
   const handleJobClick = (job: Job) => {
     if (!user) {
-      // Save the job to localStorage to redirect back after login
       localStorage.setItem('lastViewedJob', job.id);
       toast({
         title: "Sign in required",
@@ -48,25 +47,49 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
       return;
     }
 
-    // If user is logged in but hasn't uploaded resume
     if (!hasResume) {
       toast({
         title: "Resume required",
         description: "Please upload your resume to get personalized job matches",
       });
-      // Scroll to resume upload section
       document.getElementById('upload')?.scrollIntoView({ behavior: 'smooth' });
       return;
     }
 
-    // Open job application URL
     window.open(job.applyUrl, '_blank');
+  };
+
+  const scrapeJobs = async () => {
+    try {
+      setIsScrapingJobs(true);
+      const response = await supabase.functions.invoke('scrape-jobs');
+      
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      
+      toast({
+        title: "Jobs Updated",
+        description: "New jobs have been fetched successfully",
+      });
+      
+      // Refresh the jobs list
+      await fetchJobs();
+    } catch (error) {
+      console.error('Error scraping jobs:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch new jobs.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsScrapingJobs(false);
+    }
   };
 
   const fetchJobs = async () => {
     try {
       if (!user) {
-        // For non-authenticated users, show random selection of latest jobs
         const { data: jobsData, error: jobsError } = await supabase
           .from('jobs')
           .select('*')
@@ -88,12 +111,10 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         return;
       }
 
-      // Check if user has uploaded resume
       const hasUploadedResume = await checkForResume();
       setHasResume(hasUploadedResume);
 
       if (!hasUploadedResume) {
-        // Show random selection of jobs for users without resume
         const { data: randomJobs, error: randomError } = await supabase
           .from('jobs')
           .select('*')
@@ -115,7 +136,6 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         return;
       }
 
-      // For users with resume, show matched jobs
       const { data: matchesData, error: matchesError } = await supabase
         .from('job_matches')
         .select('*, jobs(*)')
@@ -127,7 +147,6 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
       if (matchesError) throw matchesError;
 
       if (!matchesData?.length) {
-        // If no unshown matches, fetch shown matches
         const { data: shownMatches, error: shownError } = await supabase
           .from('job_matches')
           .select('*, jobs(*)')
@@ -148,7 +167,6 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
 
         setJobs(jobsWithScores);
       } else {
-        // Mark fetched jobs as shown
         const jobIds = matchesData.map(match => match.job_id);
         await supabase
           .from('job_matches')
@@ -213,14 +231,20 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
           {jobs.length} jobs found, last updated {" "}
           {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
         </p>
-        {user && (
+        <div className="flex gap-2">
           <Button 
             onClick={() => fetchJobs()}
             variant="outline"
           >
             Refresh Jobs
           </Button>
-        )}
+          <Button 
+            onClick={() => scrapeJobs()}
+            disabled={isScrapingJobs}
+          >
+            {isScrapingJobs ? "Fetching..." : "Fetch New Jobs"}
+          </Button>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {jobs.map((job) => (
