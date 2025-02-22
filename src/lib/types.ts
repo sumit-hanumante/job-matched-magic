@@ -12,6 +12,21 @@ export interface Job {
   salaryRange?: string;
 }
 
+export interface ParsedResumeData {
+  skills: string[];
+  experience: string;
+  salary?: string;
+  location?: string;
+  education: string[];
+  jobTitle: string;
+  industries: string[];
+  languages: string[];
+  certifications: string[];
+  preferredWorkType?: 'remote' | 'hybrid' | 'onsite';
+  availability?: string;
+  achievements: string[];
+}
+
 export interface Resume {
   id: string;
   fileName: string;
@@ -19,6 +34,7 @@ export interface Resume {
   fileType: string;
   uploadDate: string;
   extractedSkills?: string[];
+  parsed_data?: ParsedResumeData;
   status: 'pending' | 'processed' | 'error';
 }
 

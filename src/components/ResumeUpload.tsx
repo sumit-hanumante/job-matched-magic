@@ -76,7 +76,7 @@ const ResumeUpload = () => {
         .getPublicUrl(filePath);
 
       // Create resume record in database
-      const { error: dbError } = await supabase
+      const { error: dbError, data: resumeData } = await supabase
         .from('resumes')
         .insert({
           user_id: user.id,
@@ -84,13 +84,27 @@ const ResumeUpload = () => {
           file_path: filePath,
           file_type: file.type,
           status: 'pending'
-        });
+        })
+        .select()
+        .single();
 
       if (dbError) throw dbError;
 
+      // Call the parse-resume function
+      const { error: parseError } = await supabase.functions
+        .invoke('parse-resume', {
+          body: {
+            resumeUrl: publicUrl,
+            userId: user.id,
+            resumeId: resumeData.id
+          }
+        });
+
+      if (parseError) throw parseError;
+
       toast({
         title: "Resume uploaded successfully",
-        description: "We'll process your resume and match you with relevant jobs.",
+        description: "Your resume is being analyzed. We'll notify you when it's complete.",
       });
 
       setFile(null);
