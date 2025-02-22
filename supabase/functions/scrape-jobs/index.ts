@@ -18,6 +18,7 @@ interface Job {
   source: string;
   external_job_id: string;
   applicant_count?: number;
+  posted_date?: string;
 }
 
 serve(async (req) => {
@@ -66,6 +67,7 @@ serve(async (req) => {
                   source: 'linkedin',
                   external_job_id: job.jobId,
                   applicant_count: job.applicantCount,
+                  posted_date: new Date().toISOString()
                 }));
               allJobs.push(...linkedinJobs);
               console.log(`Added ${linkedinJobs.length} LinkedIn jobs from ${location} for ${keyword}`);
@@ -77,28 +79,41 @@ serve(async (req) => {
       console.error('Error fetching LinkedIn jobs:', error);
     }
 
-    // GitHub Jobs API (Free)
+    // GitHub Jobs API (Free) - Using GitHub's RSS Feed instead of Dev.to
     try {
       console.log('Fetching GitHub jobs...');
-      const response = await fetch('https://dev.to/api/listings/search?category=job');
+      const response = await fetch('https://jobs.github.com/positions.json');
       const data = await response.json();
       
       if (Array.isArray(data)) {
         const githubJobs = data.map((job: any) => ({
           title: job.title,
-          company: job.organization || job.company_name || 'Company Not Specified',
-          location: job.location || 'Remote',
-          description: job.description || job.listing_details || '',
-          apply_url: job.url || job.link || `https://dev.to/listings/${job.id}`,
-          requirements: [],
+          company: job.company,
+          location: job.location,
+          description: job.description,
+          apply_url: job.url,
+          requirements: extractRequirements(job.description),
           source: 'github',
           external_job_id: `gh_${job.id}`,
+          posted_date: new Date(job.created_at).toISOString()
         }));
         allJobs.push(...githubJobs);
         console.log(`Added ${githubJobs.length} GitHub jobs`);
       }
     } catch (error) {
       console.error('Error fetching GitHub jobs:', error);
+      
+      // Fallback to Stack Overflow jobs RSS feed
+      try {
+        console.log('Fetching Stack Overflow jobs as fallback...');
+        const response = await fetch('https://stackoverflow.com/jobs/feed');
+        const text = await response.text();
+        const jobs = await parseStackOverflowRSS(text);
+        allJobs.push(...jobs);
+        console.log(`Added ${jobs.length} Stack Overflow jobs`);
+      } catch (fallbackError) {
+        console.error('Error fetching Stack Overflow jobs:', fallbackError);
+      }
     }
 
     // Indeed Jobs API (Paid)
@@ -122,9 +137,11 @@ serve(async (req) => {
                 location: job.location,
                 description: job.description,
                 apply_url: job.url || `https://indeed.com/viewjob?jk=${job.jobId}`,
-                salary_range: job.salary,
+                salary_range: extractSalaryFromDescription(job.description),
+                requirements: extractRequirements(job.description),
                 source: 'indeed',
                 external_job_id: job.jobId,
+                posted_date: new Date().toISOString()
               }));
               allJobs.push(...indeedJobs);
               console.log(`Added ${indeedJobs.length} Indeed jobs from ${city} for ${query}`);
@@ -156,15 +173,116 @@ serve(async (req) => {
             description: job.description || '',
             apply_url: job.url || `https://remoteok.io/l/${job.id}`,
             salary_range: job.salary,
-            requirements: [],
+            requirements: extractRequirements(job.description),
             source: 'remoteok',
             external_job_id: `rok_${job.id}`,
+            posted_date: new Date(job.date).toISOString()
           }));
         allJobs.push(...remoteJobs);
         console.log(`Added ${remoteJobs.length} RemoteOK jobs`);
       }
     } catch (error) {
       console.error('Error fetching RemoteOK jobs:', error);
+    }
+
+    // Helper function to extract requirements from job description
+    function extractRequirements(description: string): string[] {
+      if (!description) return [];
+      
+      const requirements: string[] = [];
+      
+      // Look for common requirement patterns
+      const requirementSections = description.match(/requirements:.*?(?=\n\n|\n[A-Z]|$)/gis) || [];
+      const bulletPoints = description.match(/[•\-\*]\s*([^•\n]+)/g) || [];
+      const yearsExp = description.match(/\d+\+?\s*(?:years?|yrs?)(?:\s+of)?\s+experience/gi) || [];
+      
+      // Extract skills (common programming languages, frameworks, tools)
+      const skills = [
+        'JavaScript', 'Python', 'Java', 'C\\+\\+', 'Ruby', 'PHP',
+        'React', 'Angular', 'Vue', 'Node.js', 'Express',
+        'AWS', 'Docker', 'Kubernetes', 'Git',
+        'SQL', 'MongoDB', 'PostgreSQL'
+      ];
+      const skillRegex = new RegExp(`\\b(${skills.join('|')})\\b`, 'gi');
+      const foundSkills = description.match(skillRegex) || [];
+      
+      // Combine all findings
+      requirements.push(
+        ...requirementSections,
+        ...bulletPoints.map(point => point.replace(/^[•\-\*]\s*/, '')),
+        ...yearsExp,
+        ...foundSkills
+      );
+      
+      // Remove duplicates and clean up
+      return [...new Set(requirements)]
+        .map(req => req.trim())
+        .filter(req => req.length > 0);
+    }
+
+    // Helper function to extract salary from description
+    function extractSalaryFromDescription(description: string): string {
+      if (!description) return '';
+      
+      // Look for common salary patterns
+      const salaryPatterns = [
+        /\$\d{2,3}(?:,\d{3})+(?:\s*-\s*\$\d{2,3}(?:,\d{3})+)?/g, // $50,000 - $100,000
+        /\d{2,3}(?:,\d{3})+\s*(?:USD|INR)/g, // 50,000 USD
+        /(?:USD|INR)\s*\d{2,3}(?:,\d{3})+/g, // USD 50,000
+      ];
+      
+      for (const pattern of salaryPatterns) {
+        const match = description.match(pattern);
+        if (match) return match[0];
+      }
+      
+      return '';
+    }
+
+    // Helper function to parse Stack Overflow RSS feed
+    async function parseStackOverflowRSS(xml: string): Promise<Job[]> {
+      const jobs: Job[] = [];
+      const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+      
+      items.forEach(item => {
+        const title = item.match(/<title>(.*?)<\/title>/)?.[1] || '';
+        const link = item.match(/<link>(.*?)<\/link>/)?.[1] || '';
+        const description = item.match(/<description>(.*?)<\/description>/)?.[1] || '';
+        const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || '';
+        
+        if (title && link) {
+          jobs.push({
+            title: title,
+            company: extractCompanyFromTitle(title),
+            location: extractLocationFromDescription(description) || 'Remote',
+            description: cleanDescription(description),
+            apply_url: link,
+            requirements: extractRequirements(description),
+            source: 'stackoverflow',
+            external_job_id: `so_${link.split('/').pop()}`,
+            posted_date: new Date(pubDate).toISOString()
+          });
+        }
+      });
+      
+      return jobs;
+    }
+
+    function extractCompanyFromTitle(title: string): string {
+      const match = title.match(/at\s+([^(]+)/);
+      return match ? match[1].trim() : 'Unknown Company';
+    }
+
+    function extractLocationFromDescription(description: string): string {
+      const match = description.match(/Location:\s*([^<\n]+)/i);
+      return match ? match[1].trim() : '';
+    }
+
+    function cleanDescription(description: string): string {
+      return description
+        .replace(/<[^>]+>/g, '') // Remove HTML tags
+        .replace(/&[^;]+;/g, '') // Remove HTML entities
+        .trim();
     }
 
     console.log(`Total jobs collected: ${allJobs.length}`);
@@ -183,7 +301,10 @@ serve(async (req) => {
       // Insert new jobs
       const { error: insertError } = await supabase
         .from('jobs')
-        .insert(allJobs);
+        .insert(allJobs.map(job => ({
+          ...job,
+          posted_date: job.posted_date || new Date().toISOString()
+        })));
 
       if (insertError) {
         throw insertError;
