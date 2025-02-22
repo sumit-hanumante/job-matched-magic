@@ -20,31 +20,13 @@ interface Job {
   posted_date: string;
 }
 
-async function scrapeRemoteOkJobs(): Promise<Job[]> {
-  console.log('Scraping RemoteOK jobs...');
-  const response = await fetch('https://remoteok.com/api');
-  const data = await response.json();
-  
-  return data
-    .filter((job: any) => job.position && job.company) // Filter out non-job entries
-    .map((job: any) => ({
-      title: job.position,
-      company: job.company,
-      description: job.description || '',
-      location: job.location || 'Remote',
-      salary_range: job.salary,
-      apply_url: job.url,
-      external_job_id: job.id.toString(),
-      source: 'remoteok',
-      requirements: job.tags || [],
-      posted_date: new Date(job.date).toISOString()
-    }));
-}
-
 async function scrapeGithubJobs(): Promise<Job[]> {
   console.log('Scraping GitHub jobs...');
   try {
-    const response = await fetch('https://jobs.github.com/api/positions.json');
+    const response = await fetch('https://jobs.github.com/positions.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
     const data = await response.json();
     
     return data.map((job: any) => ({
@@ -55,7 +37,7 @@ async function scrapeGithubJobs(): Promise<Job[]> {
       apply_url: job.url,
       external_job_id: job.id,
       source: 'github',
-      requirements: [],
+      requirements: [], // GitHub API doesn't provide requirements separately
       posted_date: new Date(job.created_at).toISOString()
     }));
   } catch (error) {
@@ -66,39 +48,59 @@ async function scrapeGithubJobs(): Promise<Job[]> {
 
 async function scrapeLinkedinJobs(): Promise<Job[]> {
   console.log('Scraping LinkedIn jobs...');
-  // Using a sample search for software engineering jobs
   try {
-    const response = await fetch('https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=software%20engineer&location=United%20States&geoId=103644278&trk=public_jobs_jobs-search-bar_search-submit&start=0', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const text = await response.text();
-    // Parse the HTML response
+    // We'll fetch software engineering jobs as a sample
+    const urls = [
+      'software-engineer',
+      'frontend-developer',
+      'backend-developer',
+      'fullstack-developer'
+    ].map(keyword => 
+      `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${keyword}&location=United%20States&geoId=103644278&start=0`
+    );
+
     const jobs: Job[] = [];
-    // Basic regex pattern to extract job info from HTML
-    const jobPattern = /<div class="job-card-container".*?data-job-id="(\d+)".*?<h3.*?>(.*?)<\/h3>.*?<h4.*?>(.*?)<\/h4>.*?<span class="job-card-location">(.*?)<\/span>/gs;
     
-    let match;
-    while ((match = jobPattern.exec(text)) !== null) {
-      jobs.push({
-        external_job_id: match[1],
-        title: match[2].trim(),
-        company: match[3].trim(),
-        location: match[4].trim(),
-        description: 'Visit LinkedIn for full description',
-        apply_url: `https://www.linkedin.com/jobs/view/${match[1]}/`,
-        source: 'linkedin',
-        posted_date: new Date().toISOString()
+    for (const url of urls) {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
       });
+      
+      if (!response.ok) {
+        console.warn(`Failed to fetch LinkedIn jobs for URL: ${url}`);
+        continue;
+      }
+      
+      const text = await response.text();
+      const jobPattern = /<div class="base-card relative.*?job-search-card.*?data-entity-urn="([^"]+)".*?<h3.*?base-search-card__title">(.*?)<\/h3>.*?<h4.*?base-search-card__subtitle">(.*?)<\/h4>.*?<span class="job-search-card__location">(.*?)<\/span>/gs;
+      
+      let match;
+      while ((match = jobPattern.exec(text)) !== null) {
+        const jobId = match[1].split(':').pop();
+        const title = match[2].replace(/<[^>]*>/g, '').trim();
+        const company = match[3].replace(/<[^>]*>/g, '').trim();
+        const location = match[4].replace(/<[^>]*>/g, '').trim();
+        
+        if (jobId && title && company) {
+          jobs.push({
+            external_job_id: jobId,
+            title,
+            company,
+            location,
+            description: 'Click to view full job description on LinkedIn',
+            apply_url: `https://www.linkedin.com/jobs/view/${jobId}/`,
+            source: 'linkedin',
+            requirements: [],
+            posted_date: new Date().toISOString()
+          });
+        }
+      }
     }
     
-    return jobs;
+    // Remove duplicates based on external_job_id
+    return Array.from(new Map(jobs.map(job => [job.external_job_id, job])).values());
   } catch (error) {
     console.error('Error scraping LinkedIn jobs:', error);
     return [];
@@ -122,17 +124,16 @@ serve(async (req) => {
     
     console.log('Starting job scraping...');
 
-    // Scrape jobs from multiple sources in parallel
-    const [remoteOkJobs, githubJobs, linkedinJobs] = await Promise.all([
-      scrapeRemoteOkJobs(),
+    // Scrape jobs from multiple sources in parallel, excluding RemoteOK
+    const [githubJobs, linkedinJobs] = await Promise.all([
       scrapeGithubJobs(),
       scrapeLinkedinJobs()
     ]);
 
-    const allJobs = [...remoteOkJobs, ...githubJobs, ...linkedinJobs];
+    const allJobs = [...githubJobs, ...linkedinJobs];
     console.log(`Found ${allJobs.length} jobs in total`);
 
-    // Clean up job descriptions to remove special characters
+    // Clean up job descriptions
     const cleanJobs = allJobs.map(job => ({
       ...job,
       description: job.description ? job.description.replace(/[^\x20-\x7E\n\r\t]/g, '') : ''
@@ -162,9 +163,9 @@ serve(async (req) => {
         success: true, 
         message: `Successfully scraped and inserted ${newJobs.length} new jobs`,
         jobCounts: {
-          remoteOk: remoteOkJobs.length,
           github: githubJobs.length,
-          linkedin: linkedinJobs.length
+          linkedin: linkedinJobs.length,
+          total: allJobs.length
         }
       }),
       { 
