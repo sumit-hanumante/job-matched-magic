@@ -21,6 +21,7 @@ interface Job {
 }
 
 async function scrapeRemoteOkJobs(): Promise<Job[]> {
+  console.log('Scraping RemoteOK jobs...');
   const response = await fetch('https://remoteok.com/api');
   const data = await response.json();
   
@@ -41,26 +42,67 @@ async function scrapeRemoteOkJobs(): Promise<Job[]> {
 }
 
 async function scrapeGithubJobs(): Promise<Job[]> {
-  const response = await fetch('https://jobs.github.com/positions.json');
-  const data = await response.json();
-  
-  return data.map((job: any) => ({
-    title: job.title,
-    company: job.company,
-    description: job.description,
-    location: job.location,
-    apply_url: job.url,
-    external_job_id: job.id,
-    source: 'github',
-    requirements: [],
-    posted_date: new Date(job.created_at).toISOString()
-  }));
+  console.log('Scraping GitHub jobs...');
+  try {
+    const response = await fetch('https://jobs.github.com/api/positions.json');
+    const data = await response.json();
+    
+    return data.map((job: any) => ({
+      title: job.title,
+      company: job.company,
+      description: job.description,
+      location: job.location,
+      apply_url: job.url,
+      external_job_id: job.id,
+      source: 'github',
+      requirements: [],
+      posted_date: new Date(job.created_at).toISOString()
+    }));
+  } catch (error) {
+    console.error('Error scraping GitHub jobs:', error);
+    return [];
+  }
 }
 
-async function scrapeStackOverflowJobs(): Promise<Job[]> {
-  // This is a placeholder as Stack Overflow's API requires authentication
-  // We would need to implement proper OAuth flow
-  return [];
+async function scrapeLinkedinJobs(): Promise<Job[]> {
+  console.log('Scraping LinkedIn jobs...');
+  // Using a sample search for software engineering jobs
+  try {
+    const response = await fetch('https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=software%20engineer&location=United%20States&geoId=103644278&trk=public_jobs_jobs-search-bar_search-submit&start=0', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const text = await response.text();
+    // Parse the HTML response
+    const jobs: Job[] = [];
+    // Basic regex pattern to extract job info from HTML
+    const jobPattern = /<div class="job-card-container".*?data-job-id="(\d+)".*?<h3.*?>(.*?)<\/h3>.*?<h4.*?>(.*?)<\/h4>.*?<span class="job-card-location">(.*?)<\/span>/gs;
+    
+    let match;
+    while ((match = jobPattern.exec(text)) !== null) {
+      jobs.push({
+        external_job_id: match[1],
+        title: match[2].trim(),
+        company: match[3].trim(),
+        location: match[4].trim(),
+        description: 'Visit LinkedIn for full description',
+        apply_url: `https://www.linkedin.com/jobs/view/${match[1]}/`,
+        source: 'linkedin',
+        posted_date: new Date().toISOString()
+      });
+    }
+    
+    return jobs;
+  } catch (error) {
+    console.error('Error scraping LinkedIn jobs:', error);
+    return [];
+  }
 }
 
 serve(async (req) => {
@@ -80,15 +122,21 @@ serve(async (req) => {
     
     console.log('Starting job scraping...');
 
-    // Scrape jobs from multiple sources
-    const [remoteOkJobs, githubJobs, stackOverflowJobs] = await Promise.all([
+    // Scrape jobs from multiple sources in parallel
+    const [remoteOkJobs, githubJobs, linkedinJobs] = await Promise.all([
       scrapeRemoteOkJobs(),
       scrapeGithubJobs(),
-      scrapeStackOverflowJobs()
+      scrapeLinkedinJobs()
     ]);
 
-    const allJobs = [...remoteOkJobs, ...githubJobs, ...stackOverflowJobs];
+    const allJobs = [...remoteOkJobs, ...githubJobs, ...linkedinJobs];
     console.log(`Found ${allJobs.length} jobs in total`);
+
+    // Clean up job descriptions to remove special characters
+    const cleanJobs = allJobs.map(job => ({
+      ...job,
+      description: job.description ? job.description.replace(/[^\x20-\x7E\n\r\t]/g, '') : ''
+    }));
 
     // Get existing job IDs to avoid duplicates
     const { data: existingJobs } = await supabase
@@ -98,7 +146,7 @@ serve(async (req) => {
     const existingIds = new Set(existingJobs?.map(job => job.external_job_id));
 
     // Filter out existing jobs
-    const newJobs = allJobs.filter(job => !existingIds.has(job.external_job_id));
+    const newJobs = cleanJobs.filter(job => !existingIds.has(job.external_job_id));
     console.log(`Found ${newJobs.length} new jobs to insert`);
 
     if (newJobs.length > 0) {
@@ -112,7 +160,12 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Successfully scraped and inserted ${newJobs.length} new jobs`
+        message: `Successfully scraped and inserted ${newJobs.length} new jobs`,
+        jobCounts: {
+          remoteOk: remoteOkJobs.length,
+          github: githubJobs.length,
+          linkedin: linkedinJobs.length
+        }
       }),
       { 
         headers: { 
