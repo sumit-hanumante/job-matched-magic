@@ -34,42 +34,46 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-white text-foreground antialiased;
     font-family: 'Inter', sans-serif;
     min-height: 100vh;
-    position: relative;
-    overflow-x: hidden;
   }
 
-  body::before {
-    content: '';
+  .animated-shape {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: 
-      radial-gradient(circle at 50% 50%, rgba(78, 204, 163, 0.03) 0%, transparent 50%),
-      radial-gradient(circle at 80% 20%, rgba(78, 204, 163, 0.05) 0%, transparent 30%),
-      radial-gradient(circle at 20% 80%, rgba(78, 204, 163, 0.05) 0%, transparent 30%),
-      #ffffff;
-    background-size: 200% 200%, 150% 150%, 150% 150%, 100% 100%;
+    width: 60vmax;
+    height: 60vmax;
+    top: -20vmax;
+    right: -20vmax;
+    border-radius: 47% 53% 61% 39% / 45% 51% 49% 55%;
+    background-color: rgba(78, 204, 163, 0.03);
+    animation: morph 15s linear infinite;
+    transform-origin: 50% 50%;
     z-index: -1;
-    animation: move-bg 20s ease infinite;
   }
 
-  @keyframes move-bg {
-    0%, 100% {
-      background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%;
-    }
-    25% {
-      background-position: 100% 0%, 50% 25%, -50% 25%, 0% 0%;
+  .animated-shape:nth-child(2) {
+    width: 50vmax;
+    height: 50vmax;
+    left: -10vmax;
+    bottom: -20vmax;
+    top: auto;
+    right: auto;
+    animation: morph 15s linear infinite reverse;
+    background-color: rgba(78, 204, 163, 0.03);
+  }
+
+  @keyframes morph {
+    0% {
+      border-radius: 47% 53% 61% 39% / 45% 51% 49% 55%;
+      transform: rotate(0deg);
     }
     50% {
-      background-position: 200% 0%, 100% 50%, -100% 50%, 0% 0%;
+      border-radius: 52% 48% 39% 61% / 55% 45% 55% 45%;
     }
-    75% {
-      background-position: 100% 0%, 50% 75%, -50% 75%, 0% 0%;
+    100% {
+      border-radius: 47% 53% 61% 39% / 45% 51% 49% 55%;
+      transform: rotate(360deg);
     }
   }
 

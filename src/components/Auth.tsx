@@ -11,6 +11,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const { toast } = useToast();
 
   const validateEmail = (email: string) => {
@@ -30,12 +31,24 @@ const Auth = () => {
       return;
     }
 
+    if (!fullName.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Name Required",
+        description: "Please enter your full name",
+      });
+      return;
+    }
+
     try {
       setLoading(true);
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          data: {
+            full_name: fullName.trim(),
+          },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
@@ -133,6 +146,17 @@ const Auth = () => {
           
           <TabsContent value="signup">
             <form onSubmit={handleSignUp} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="signup-name">Full Name</Label>
+                <Input
+                  id="signup-name"
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="signup-email">Email</Label>
                 <Input
