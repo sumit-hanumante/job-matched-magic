@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -22,40 +23,112 @@ interface Job {
 async function scrapeGithubJobs(): Promise<Job[]> {
   console.log('Scraping Github jobs...');
   try {
-    // Implementation for GitHub Jobs API
-    const jobs: Job[] = [];
-    // Add GitHub jobs implementation here
-    return jobs;
+    const response = await fetch('https://jobs.github.com/positions.json');
+    if (!response.ok) throw new Error('Failed to fetch Github jobs');
+    
+    const data = await response.json();
+    return data.map((job: any) => ({
+      title: job.title,
+      company: job.company,
+      location: job.location,
+      description: job.description,
+      apply_url: job.url,
+      source: 'github',
+      external_job_id: `gh_${job.id}`,
+      requirements: extractRequirements(job.description),
+      salary_range: extractSalaryRange(job.description)
+    }));
   } catch (error) {
     console.error('Error scraping Github jobs:', error);
     return [];
   }
 }
 
-async function scrapeLinkedinJobs(): Promise<Job[]> {
-  console.log('Scraping LinkedIn jobs...');
+async function scrapeRemoteOkJobs(): Promise<Job[]> {
+  console.log('Scraping RemoteOK jobs...');
   try {
-    // Implementation for LinkedIn Jobs API
-    const jobs: Job[] = [];
-    // Add LinkedIn jobs implementation here
-    return jobs;
+    const response = await fetch('https://remoteok.io/api', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    if (!response.ok) throw new Error('Failed to fetch RemoteOK jobs');
+    
+    const data = await response.json();
+    // Remove the first item as it's usually metadata
+    const jobs = data.slice(1);
+    
+    return jobs.map((job: any) => ({
+      title: job.position,
+      company: job.company,
+      location: job.location || 'Remote',
+      description: job.description,
+      apply_url: job.url,
+      source: 'remoteok',
+      external_job_id: `rok_${job.id}`,
+      requirements: extractRequirements(job.description),
+      salary_range: job.salary || extractSalaryRange(job.description)
+    }));
   } catch (error) {
-    console.error('Error scraping LinkedIn jobs:', error);
+    console.error('Error scraping RemoteOK jobs:', error);
     return [];
   }
 }
 
-async function scrapeGoogleJobs(): Promise<Job[]> {
-  console.log('Scraping Google jobs...');
-  try {
-    // Implementation for Google Jobs API
-    const jobs: Job[] = [];
-    // Add Google jobs implementation here
-    return jobs;
-  } catch (error) {
-    console.error('Error scraping Google jobs:', error);
-    return [];
+function extractRequirements(description: string): string[] {
+  const requirements: string[] = [];
+  
+  // Common requirement indicators
+  const requirementPatterns = [
+    /requirements?:/i,
+    /qualifications?:/i,
+    /what you('ll)? need:/i,
+    /what we('re)? looking for:/i,
+    /must have:/i
+  ];
+  
+  // Look for bullet points or numbered lists after requirement indicators
+  requirementPatterns.forEach(pattern => {
+    const match = description.match(new RegExp(`${pattern.source}([^]*?)(?=\\n\\n|$)`, 'i'));
+    if (match) {
+      const requirementSection = match[1];
+      const bullets = requirementSection.match(/[•\-\*]\s*([^\n]+)/g) || 
+                     requirementSection.match(/\d+\.\s*([^\n]+)/g);
+      
+      if (bullets) {
+        bullets.forEach(bullet => {
+          const cleaned = bullet.replace(/[•\-\*\d+\.]\s*/, '').trim();
+          if (cleaned && !requirements.includes(cleaned)) {
+            requirements.push(cleaned);
+          }
+        });
+      }
+    }
+  });
+  
+  return requirements;
+}
+
+function extractSalaryRange(description: string): string | undefined {
+  const salaryPatterns = [
+    /\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*-\s*\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/i,
+    /(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*k\s*-\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*k/i,
+    /salary:\s*\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/i
+  ];
+
+  for (const pattern of salaryPatterns) {
+    const match = description.match(pattern);
+    if (match) {
+      if (match[2]) {
+        return `$${match[1]} - $${match[2]}${pattern.source.includes('k') ? 'K' : ''}`;
+      } else {
+        return `$${match[1]}`;
+      }
+    }
   }
+
+  return undefined;
 }
 
 serve(async (req) => {
@@ -76,23 +149,33 @@ serve(async (req) => {
     console.log('Starting job scraping process...');
 
     // Scrape jobs from all sources in parallel
-    const [githubJobs, linkedinJobs, googleJobs] = await Promise.all([
+    const [githubJobs, remoteOkJobs] = await Promise.all([
       scrapeGithubJobs(),
-      scrapeLinkedinJobs(),
-      scrapeGoogleJobs()
+      scrapeRemoteOkJobs()
     ]);
 
-    const allJobs = [...githubJobs, ...linkedinJobs, ...googleJobs];
+    const allJobs = [...githubJobs, ...remoteOkJobs];
 
     console.log(`Found ${allJobs.length} jobs in total`);
 
     // Insert new jobs into the database
     if (allJobs.length > 0) {
+      // First, mark old jobs as expired
+      const sixtyDaysAgo = new Date();
+      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+      await supabase
+        .from('jobs')
+        .delete()
+        .lt('posted_date', sixtyDaysAgo.toISOString());
+
+      // Insert new jobs
       const { data: newJobs, error } = await supabase
         .from('jobs')
         .upsert(
           allJobs.map(job => ({
             ...job,
+            posted_date: new Date().toISOString(),
             last_scraped_at: new Date().toISOString()
           })),
           { 
@@ -112,8 +195,7 @@ serve(async (req) => {
         message: `Successfully scraped and processed ${allJobs.length} jobs`,
         jobCounts: {
           github: githubJobs.length,
-          linkedin: linkedinJobs.length,
-          google: googleJobs.length,
+          remoteok: remoteOkJobs.length,
           total: allJobs.length
         }
       }),
