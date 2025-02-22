@@ -10,32 +10,16 @@ export interface Job {
   postedDate: string;
   requirements?: string[];
   salaryRange?: string;
-}
-
-export interface ParsedResumeData {
-  skills: string[];
-  experience: string;
-  salary?: string;
-  location?: string;
-  education: string[];
-  jobTitle: string;
-  industries: string[];
-  languages: string[];
-  certifications: string[];
-  preferredWorkType?: 'remote' | 'hybrid' | 'onsite';
-  availability?: string;
-  achievements: string[];
+  lastScrapedAt?: string;
+  source: string;
 }
 
 export interface Resume {
   id: string;
-  fileName: string;
-  filePath: string;
-  fileType: string;
-  uploadDate: string;
-  extractedSkills?: string[];
-  parsed_data?: ParsedResumeData;
-  status: 'pending' | 'processed' | 'error';
+  userId: string;
+  skills: string[];
+  experience: string;
+  salary?: string;
 }
 
 export interface JobMatch {

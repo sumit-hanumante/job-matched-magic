@@ -53,7 +53,8 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
     try {
       const { data: jobsData, error: jobsError } = await supabase
         .from('jobs')
-        .select('*');
+        .select('*')
+        .order('last_scraped_at', { ascending: false });
 
       if (jobsError) throw jobsError;
 
@@ -70,7 +71,10 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         const jobsWithScores = jobsData?.map(job => ({
           ...job,
           matchScore: matchesMap.get(job.id) || 0,
-          postedDate: new Date(job.posted_date).toISOString().split('T')[0]
+          postedDate: new Date(job.posted_date).toISOString().split('T')[0],
+          applyUrl: job.apply_url,
+          salaryRange: job.salary_range,
+          lastScrapedAt: job.last_scraped_at
         }));
 
         setJobs(jobsWithScores);
@@ -78,7 +82,10 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         setJobs(jobsData?.map(job => ({
           ...job,
           matchScore: 0,
-          postedDate: new Date(job.posted_date).toISOString().split('T')[0]
+          postedDate: new Date(job.posted_date).toISOString().split('T')[0],
+          applyUrl: job.apply_url,
+          salaryRange: job.salary_range,
+          lastScrapedAt: job.last_scraped_at
         })));
       }
     } catch (error) {
@@ -125,7 +132,11 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-muted-foreground">
+          {jobs.length} jobs found, last updated {" "}
+          {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
+        </p>
         <Button 
           onClick={handleScrapeJobs}
           disabled={isScrapingJobs}

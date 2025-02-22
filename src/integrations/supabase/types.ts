@@ -115,33 +115,24 @@ export type Database = {
       }
       resumes: {
         Row: {
+          experience: string | null
           extracted_skills: string[] | null
-          file_name: string
-          file_path: string
-          file_type: string
           id: string
-          status: string | null
-          upload_date: string | null
+          salary: string | null
           user_id: string
         }
         Insert: {
+          experience?: string | null
           extracted_skills?: string[] | null
-          file_name: string
-          file_path: string
-          file_type: string
           id?: string
-          status?: string | null
-          upload_date?: string | null
+          salary?: string | null
           user_id: string
         }
         Update: {
+          experience?: string | null
           extracted_skills?: string[] | null
-          file_name?: string
-          file_path?: string
-          file_type?: string
           id?: string
-          status?: string | null
-          upload_date?: string | null
+          salary?: string | null
           user_id?: string
         }
         Relationships: []

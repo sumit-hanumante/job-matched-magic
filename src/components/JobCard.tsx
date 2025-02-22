@@ -1,6 +1,7 @@
 
 import { Job } from "@/lib/types";
 import { ArrowUpRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface JobCardProps {
   job: Job;
@@ -21,17 +22,29 @@ const JobCard = ({ job }: JobCardProps) => {
       
       <p className="text-sm text-gray-600 mb-4 line-clamp-2">{job.description}</p>
       
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-muted-foreground">{job.location}</span>
-        <a
-          href={job.applyUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-between items-center text-xs text-muted-foreground">
+          <span>{job.location}</span>
+          <span>Source: {job.source}</span>
+        </div>
+        {job.salaryRange && (
+          <p className="text-xs text-muted-foreground">Salary: {job.salaryRange}</p>
+        )}
+        <Button
+          asChild
+          variant="outline"
+          className="w-full mt-2"
         >
-          Apply Now
-          <ArrowUpRight className="h-4 w-4" />
-        </a>
+          <a
+            href={job.applyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1"
+          >
+            Apply Now
+            <ArrowUpRight className="h-4 w-4" />
+          </a>
+        </Button>
       </div>
     </div>
   );
