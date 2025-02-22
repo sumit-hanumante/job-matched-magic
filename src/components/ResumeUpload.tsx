@@ -18,7 +18,6 @@ const ResumeUpload = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Fetch current resume status
   useEffect(() => {
     if (user) {
       fetchCurrentResume();
@@ -33,14 +32,9 @@ const ResumeUpload = () => {
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        if (error.code !== 'PGRST116') { // No rows returned
-          console.error('Error fetching resume:', error);
-        }
-        return;
-      }
+      if (error) throw error;
 
       if (data) {
         setCurrentResume({
@@ -99,22 +93,25 @@ const ResumeUpload = () => {
 
     setIsUploading(true);
     try {
-      // Create the user-specific folder path
+      // Create unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      const { error: uploadError, data } = await supabase.storage
+      // Upload file to storage
+      const { error: uploadError } = await supabase.storage
         .from('resumes')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
+      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('resumes')
         .getPublicUrl(filePath);
 
-      const { error: dbError, data: resumeData } = await supabase
+      // Save to resumes table
+      const { error: dbError } = await supabase
         .from('resumes')
         .insert({
           user_id: user.id,
@@ -128,25 +125,12 @@ const ResumeUpload = () => {
 
       if (dbError) throw dbError;
 
-      const { error: parseError } = await supabase.functions
-        .invoke('parse-resume', {
-          body: {
-            resumeUrl: publicUrl,
-            userId: user.id,
-            resumeId: resumeData.id
-          }
-        });
-
-      if (parseError) throw parseError;
-
       toast({
         title: "Resume uploaded successfully",
         description: "Your resume is being analyzed. We'll notify you when it's complete.",
       });
 
       setFile(null);
-      
-      // Reset the file input
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
