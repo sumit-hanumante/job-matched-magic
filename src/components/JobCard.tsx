@@ -18,22 +18,10 @@ const JobCard = ({ job }: JobCardProps) => {
           <h3 className="text-lg font-semibold text-gray-900">{job.title}</h3>
           <p className="text-sm text-muted-foreground">{job.company}</p>
         </div>
-      </div>
-      
-      <p className="text-sm text-gray-600 mb-4 line-clamp-2">{job.description}</p>
-      
-      <div className="flex flex-col gap-2">
-        <div className="flex justify-between items-center text-xs text-muted-foreground">
-          <span>{job.location}</span>
-          <span>Source: {job.source}</span>
-        </div>
-        {job.salaryRange && (
-          <p className="text-xs text-muted-foreground">Salary: {job.salaryRange}</p>
-        )}
         <Button
           asChild
-          variant="outline"
-          className="w-full mt-2"
+          className="bg-primary hover:bg-primary/90 text-white"
+          size="sm"
         >
           <a
             href={job.applyUrl}
@@ -46,6 +34,16 @@ const JobCard = ({ job }: JobCardProps) => {
           </a>
         </Button>
       </div>
+      
+      <p className="text-sm text-gray-600 mb-4 line-clamp-2">{job.description}</p>
+      
+      <div className="flex justify-between items-center text-xs text-muted-foreground">
+        <span>{job.location}</span>
+        <span>Source: {job.source}</span>
+      </div>
+      {job.salaryRange && (
+        <p className="text-xs text-muted-foreground mt-2">Salary: {job.salaryRange}</p>
+      )}
     </div>
   );
 };

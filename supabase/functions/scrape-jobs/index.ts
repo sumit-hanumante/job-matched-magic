@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 
@@ -117,9 +116,17 @@ serve(async (req) => {
 
     function cleanDescription(description: string): string {
       return description
-        .replace(/<[^>]+>/g, '') // Remove HTML tags
-        .replace(/&[^;]+;/g, ' ') // Replace HTML entities with spaces
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove style tags and their content
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove script tags and their content
+        .replace(/<\/?\w(?:[^"'>]|"[^"]*"|'[^']*')*>/g, '') // Remove HTML tags
+        .replace(/&nbsp;/g, ' ') // Replace &nbsp; with space
+        .replace(/&amp;/g, '&') // Replace &amp; with &
+        .replace(/&lt;/g, '<') // Replace &lt; with <
+        .replace(/&gt;/g, '>') // Replace &gt; with >
+        .replace(/&quot;/g, '"') // Replace &quot; with "
+        .replace(/&#39;/g, "'") // Replace &#39; with '
         .replace(/\s+/g, ' ') // Normalize whitespace
+        .replace(/\n\s*\n/g, '\n') // Remove multiple blank lines
         .trim();
     }
 
