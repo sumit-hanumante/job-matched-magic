@@ -1,6 +1,6 @@
 
-import { useState } from "react";
-import { Upload, FileText } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Upload, FileText, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/components/AuthProvider";
@@ -10,8 +10,49 @@ const ResumeUpload = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [currentResume, setCurrentResume] = useState<{
+    filename?: string;
+    status?: string;
+    uploaded_at?: string;
+  } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+
+  // Fetch current resume status
+  useEffect(() => {
+    if (user) {
+      fetchCurrentResume();
+    }
+  }, [user]);
+
+  const fetchCurrentResume = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('resumes')
+        .select('file_name, status, created_at')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) {
+        if (error.code !== 'PGRST116') { // No rows returned
+          console.error('Error fetching resume:', error);
+        }
+        return;
+      }
+
+      if (data) {
+        setCurrentResume({
+          filename: data.file_name,
+          status: data.status,
+          uploaded_at: new Date(data.created_at).toLocaleDateString()
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching resume:', error);
+    }
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -63,19 +104,16 @@ const ResumeUpload = () => {
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      // Upload file to Supabase Storage
       const { error: uploadError, data } = await supabase.storage
         .from('resumes')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // Get the public URL of the uploaded file
       const { data: { publicUrl } } = supabase.storage
         .from('resumes')
         .getPublicUrl(filePath);
 
-      // Create resume record in database
       const { error: dbError, data: resumeData } = await supabase
         .from('resumes')
         .insert({
@@ -90,7 +128,6 @@ const ResumeUpload = () => {
 
       if (dbError) throw dbError;
 
-      // Call the parse-resume function
       const { error: parseError } = await supabase.functions
         .invoke('parse-resume', {
           body: {
@@ -113,6 +150,9 @@ const ResumeUpload = () => {
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
+      // Refresh the current resume status
+      fetchCurrentResume();
+      
     } catch (error) {
       console.error('Upload error:', error);
       toast({
@@ -127,6 +167,19 @@ const ResumeUpload = () => {
 
   return (
     <div className="w-full max-w-xl mx-auto">
+      {currentResume && (
+        <div className="mb-6 p-4 bg-muted rounded-lg">
+          <h4 className="font-medium mb-2">Current Resume</h4>
+          <p className="text-sm text-muted-foreground">
+            {currentResume.filename}
+          </p>
+          <div className="flex justify-between items-center mt-2 text-xs text-muted-foreground">
+            <span>Uploaded: {currentResume.uploaded_at}</span>
+            <span className="capitalize">Status: {currentResume.status}</span>
+          </div>
+        </div>
+      )}
+
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -152,7 +205,9 @@ const ResumeUpload = () => {
           <Upload className="w-12 h-12 mx-auto mb-4 text-primary relative" />
         </div>
         
-        <h3 className="text-lg font-semibold mb-2">Upload Your Resume</h3>
+        <h3 className="text-lg font-semibold mb-2">
+          {currentResume ? "Update Your Resume" : "Upload Your Resume"}
+        </h3>
         <p className="text-sm text-muted-foreground mb-4">
           Drop your PDF or DOCX file here, or click to browse
         </p>
@@ -185,7 +240,14 @@ const ResumeUpload = () => {
                 disabled={isUploading}
                 className="w-full bg-primary hover:bg-primary/90"
               >
-                {isUploading ? "Uploading..." : "Upload Resume"}
+                {isUploading ? (
+                  <span className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Uploading...
+                  </span>
+                ) : (
+                  "Upload Resume"
+                )}
               </Button>
             </div>
           )}

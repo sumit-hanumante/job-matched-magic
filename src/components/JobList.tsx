@@ -31,14 +31,32 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
       const { data, error } = await supabase.functions.invoke('scrape-jobs');
       
       if (error) throw error;
+
+      // Fetch the newly scraped jobs immediately
+      const { data: newJobs, error: fetchError } = await supabase
+        .from('jobs')
+        .select('*')
+        .order('posted_date', { ascending: false });
+
+      if (fetchError) throw fetchError;
+
+      // Transform and set the jobs
+      const transformedJobs = newJobs.map(job => ({
+        ...job,
+        matchScore: 0, // For testing, set match score to 0
+        postedDate: new Date(job.posted_date).toISOString().split('T')[0],
+        applyUrl: job.apply_url,
+        salaryRange: job.salary_range,
+        lastScrapedAt: job.last_scraped_at
+      }));
+
+      setJobs(transformedJobs);
       
       toast({
         title: "Success!",
-        description: data.message
+        description: `${transformedJobs.length} jobs fetched successfully`
       });
       
-      // Refresh jobs list after scraping
-      fetchJobs();
     } catch (error) {
       console.error('Error scraping jobs:', error);
       toast({
