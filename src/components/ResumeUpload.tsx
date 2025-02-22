@@ -1,10 +1,17 @@
 
 import { useState } from "react";
 import { Upload } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/components/AuthProvider";
+import { Button } from "@/components/ui/button";
 
 const ResumeUpload = () => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -29,6 +36,51 @@ const ResumeUpload = () => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
+    }
+  };
+
+  const uploadResume = async () => {
+    if (!file || !user) return;
+
+    setIsUploading(true);
+    try {
+      // Upload file to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('resumes')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Create resume record in database
+      const { error: dbError } = await supabase
+        .from('resumes')
+        .upsert({
+          user_id: user.id,
+          file_name: file.name,
+          file_path: filePath,
+          file_type: file.type,
+          status: 'pending'
+        });
+
+      if (dbError) throw dbError;
+
+      toast({
+        title: "Resume uploaded successfully",
+        description: "We'll process your resume and match you with relevant jobs.",
+      });
+
+      setFile(null);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "An error occurred while uploading your resume",
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -62,18 +114,28 @@ const ResumeUpload = () => {
           onChange={handleFileInput}
         />
         
-        <label
-          htmlFor="file-upload"
-          className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors cursor-pointer"
-        >
-          Choose File
-        </label>
+        <div className="space-y-4">
+          <label
+            htmlFor="file-upload"
+            className="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors cursor-pointer"
+          >
+            Choose File
+          </label>
 
-        {file && (
-          <div className="mt-4 text-sm text-muted-foreground">
-            Selected file: {file.name}
-          </div>
-        )}
+          {file && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                Selected file: {file.name}
+              </div>
+              <Button 
+                onClick={uploadResume} 
+                disabled={isUploading}
+              >
+                {isUploading ? "Uploading..." : "Upload Resume"}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

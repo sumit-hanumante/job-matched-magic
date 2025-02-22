@@ -8,16 +8,24 @@ export interface Job {
   applyUrl: string;
   matchScore: number;
   postedDate: string;
+  requirements?: string[];
+  salaryRange?: string;
 }
 
 export interface Resume {
   id: string;
   fileName: string;
+  filePath: string;
+  fileType: string;
   uploadDate: string;
-  skills: string[];
-  experience: {
-    title: string;
-    company: string;
-    duration: string;
-  }[];
+  extractedSkills?: string[];
+  status: 'pending' | 'processed' | 'error';
+}
+
+export interface JobMatch {
+  id: string;
+  userId: string;
+  jobId: string;
+  matchScore: number;
+  createdAt: string;
 }

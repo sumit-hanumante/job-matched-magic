@@ -9,6 +9,74 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      job_matches: {
+        Row: {
+          created_at: string | null
+          id: string
+          job_id: string
+          match_score: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          job_id: string
+          match_score: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          job_id?: string
+          match_score?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_matches_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobs: {
+        Row: {
+          apply_url: string
+          company: string
+          description: string
+          id: string
+          location: string
+          posted_date: string | null
+          requirements: string[] | null
+          salary_range: string | null
+          title: string
+        }
+        Insert: {
+          apply_url: string
+          company: string
+          description: string
+          id?: string
+          location: string
+          posted_date?: string | null
+          requirements?: string[] | null
+          salary_range?: string | null
+          title: string
+        }
+        Update: {
+          apply_url?: string
+          company?: string
+          description?: string
+          id?: string
+          location?: string
+          posted_date?: string | null
+          requirements?: string[] | null
+          salary_range?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -27,6 +95,39 @@ export type Database = {
           id?: string
           updated_at?: string | null
           username?: string | null
+        }
+        Relationships: []
+      }
+      resumes: {
+        Row: {
+          extracted_skills: string[] | null
+          file_name: string
+          file_path: string
+          file_type: string
+          id: string
+          status: string | null
+          upload_date: string | null
+          user_id: string
+        }
+        Insert: {
+          extracted_skills?: string[] | null
+          file_name: string
+          file_path: string
+          file_type: string
+          id?: string
+          status?: string | null
+          upload_date?: string | null
+          user_id: string
+        }
+        Update: {
+          extracted_skills?: string[] | null
+          file_name?: string
+          file_path?: string
+          file_type?: string
+          id?: string
+          status?: string | null
+          upload_date?: string | null
+          user_id?: string
         }
         Relationships: []
       }
