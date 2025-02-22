@@ -5,41 +5,6 @@ import JobList from "@/components/JobList";
 import Auth from "@/components/Auth";
 import Header from "@/components/Header";
 import { useAuth } from "@/components/AuthProvider";
-import { Job } from "@/lib/types";
-
-// Sample data for demonstration
-const sampleJobs: Job[] = [
-  {
-    id: "1",
-    title: "Senior Frontend Developer",
-    company: "TechCorp",
-    location: "Remote",
-    description: "We're looking for an experienced frontend developer with expertise in React and TypeScript...",
-    applyUrl: "https://example.com/jobs/1",
-    matchScore: 95,
-    postedDate: "2024-03-15",
-  },
-  {
-    id: "2",
-    title: "Full Stack Engineer",
-    company: "InnovateX",
-    location: "New York, NY",
-    description: "Join our team of passionate developers building next-generation web applications...",
-    applyUrl: "https://example.com/jobs/2",
-    matchScore: 88,
-    postedDate: "2024-03-14",
-  },
-  {
-    id: "3",
-    title: "Software Architect",
-    company: "CloudScale",
-    location: "San Francisco, CA",
-    description: "Looking for an experienced architect to lead our technical initiatives and drive innovation...",
-    applyUrl: "https://example.com/jobs/3",
-    matchScore: 82,
-    postedDate: "2024-03-13",
-  },
-];
 
 const Index = () => {
   const { user } = useAuth();
@@ -69,7 +34,7 @@ const Index = () => {
                   Based on your skills and experience, we've found these opportunities that match your profile.
                 </p>
               </div>
-              <JobList jobs={sampleJobs} />
+              <JobList />
             </section>
           </>
         )}
