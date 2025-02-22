@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Upload, FileText, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 
@@ -93,6 +93,22 @@ const ResumeUpload = () => {
 
     setIsUploading(true);
     try {
+      // First, remove any existing resume files for this user
+      const { data: existingResumes } = await supabase
+        .from('resumes')
+        .select('file_path')
+        .eq('user_id', user.id);
+
+      if (existingResumes?.length) {
+        for (const resume of existingResumes) {
+          if (resume.file_path) {
+            await supabase.storage
+              .from('resumes')
+              .remove([resume.file_path]);
+          }
+        }
+      }
+
       // Create unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
@@ -105,23 +121,22 @@ const ResumeUpload = () => {
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
+      // Delete existing resume records for this user
+      await supabase
         .from('resumes')
-        .getPublicUrl(filePath);
+        .delete()
+        .eq('user_id', user.id);
 
-      // Save to resumes table
+      // Save new resume to resumes table
       const { error: dbError } = await supabase
         .from('resumes')
         .insert({
           user_id: user.id,
           file_name: file.name,
           file_path: filePath,
-          file_type: file.type,
+          content_type: file.type,
           status: 'pending'
-        })
-        .select()
-        .single();
+        });
 
       if (dbError) throw dbError;
 
