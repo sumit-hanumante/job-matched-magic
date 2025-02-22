@@ -11,25 +11,43 @@ export type Database = {
     Tables: {
       job_matches: {
         Row: {
+          company_match_score: number | null
           created_at: string | null
           id: string
+          is_shown: boolean | null
           job_id: string
+          location_match_score: number | null
           match_score: number
+          salary_match_score: number | null
+          skill_match_score: number | null
           user_id: string
+          viewed_at: string | null
         }
         Insert: {
+          company_match_score?: number | null
           created_at?: string | null
           id?: string
+          is_shown?: boolean | null
           job_id: string
+          location_match_score?: number | null
           match_score: number
+          salary_match_score?: number | null
+          skill_match_score?: number | null
           user_id: string
+          viewed_at?: string | null
         }
         Update: {
+          company_match_score?: number | null
           created_at?: string | null
           id?: string
+          is_shown?: boolean | null
           job_id?: string
+          location_match_score?: number | null
           match_score?: number
+          salary_match_score?: number | null
+          skill_match_score?: number | null
           user_id?: string
+          viewed_at?: string | null
         }
         Relationships: [
           {
@@ -118,6 +136,11 @@ export type Database = {
           experience: string | null
           extracted_skills: string[] | null
           id: string
+          max_salary: number | null
+          min_salary: number | null
+          preferred_companies: string[] | null
+          preferred_locations: string[] | null
+          preferred_work_type: string | null
           salary: string | null
           user_id: string
         }
@@ -125,6 +148,11 @@ export type Database = {
           experience?: string | null
           extracted_skills?: string[] | null
           id?: string
+          max_salary?: number | null
+          min_salary?: number | null
+          preferred_companies?: string[] | null
+          preferred_locations?: string[] | null
+          preferred_work_type?: string | null
           salary?: string | null
           user_id: string
         }
@@ -132,6 +160,11 @@ export type Database = {
           experience?: string | null
           extracted_skills?: string[] | null
           id?: string
+          max_salary?: number | null
+          min_salary?: number | null
+          preferred_companies?: string[] | null
+          preferred_locations?: string[] | null
+          preferred_work_type?: string | null
           salary?: string | null
           user_id?: string
         }

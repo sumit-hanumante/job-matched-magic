@@ -12,6 +12,8 @@ interface JobListProps {
   jobs?: Job[];
 }
 
+const DAILY_JOB_LIMIT = 10;
+
 const JobList = ({ jobs: propJobs }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,34 +53,14 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
 
   const fetchJobs = async () => {
     try {
-      const { data: jobsData, error: jobsError } = await supabase
-        .from('jobs')
-        .select('*')
-        .order('last_scraped_at', { ascending: false });
+      if (!user) {
+        const { data: jobsData, error: jobsError } = await supabase
+          .from('jobs')
+          .select('*')
+          .order('posted_date', { ascending: false });
 
-      if (jobsError) throw jobsError;
+        if (jobsError) throw jobsError;
 
-      if (user) {
-        const { data: matchesData, error: matchesError } = await supabase
-          .from('job_matches')
-          .select('job_id, match_score')
-          .eq('user_id', user.id);
-
-        if (matchesError) throw matchesError;
-
-        const matchesMap = new Map(matchesData?.map(m => [m.job_id, m.match_score]));
-        
-        const jobsWithScores = jobsData?.map(job => ({
-          ...job,
-          matchScore: matchesMap.get(job.id) || 0,
-          postedDate: new Date(job.posted_date).toISOString().split('T')[0],
-          applyUrl: job.apply_url,
-          salaryRange: job.salary_range,
-          lastScrapedAt: job.last_scraped_at
-        }));
-
-        setJobs(jobsWithScores);
-      } else {
         setJobs(jobsData?.map(job => ({
           ...job,
           matchScore: 0,
@@ -86,7 +68,62 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
           applyUrl: job.apply_url,
           salaryRange: job.salary_range,
           lastScrapedAt: job.last_scraped_at
-        })));
+        })) || []);
+        
+        setIsLoading(false);
+        return;
+      }
+
+      // For authenticated users, fetch unshown matches first
+      const { data: matchesData, error: matchesError } = await supabase
+        .from('job_matches')
+        .select('*, jobs(*)')
+        .eq('user_id', user.id)
+        .eq('is_shown', false)
+        .order('match_score', { ascending: false })
+        .limit(DAILY_JOB_LIMIT);
+
+      if (matchesError) throw matchesError;
+
+      if (!matchesData?.length) {
+        // If no unshown matches, fetch shown matches
+        const { data: shownMatches, error: shownError } = await supabase
+          .from('job_matches')
+          .select('*, jobs(*)')
+          .eq('user_id', user.id)
+          .eq('is_shown', true)
+          .order('match_score', { ascending: false });
+
+        if (shownError) throw shownError;
+        
+        const jobsWithScores = shownMatches?.map(match => ({
+          ...match.jobs,
+          matchScore: match.match_score,
+          postedDate: new Date(match.jobs.posted_date).toISOString().split('T')[0],
+          applyUrl: match.jobs.apply_url,
+          salaryRange: match.jobs.salary_range,
+          lastScrapedAt: match.jobs.last_scraped_at
+        })) || [];
+
+        setJobs(jobsWithScores);
+      } else {
+        // Mark fetched jobs as shown
+        const jobIds = matchesData.map(match => match.job_id);
+        await supabase
+          .from('job_matches')
+          .update({ is_shown: true, viewed_at: new Date().toISOString() })
+          .in('job_id', jobIds);
+
+        const jobsWithScores = matchesData.map(match => ({
+          ...match.jobs,
+          matchScore: match.match_score,
+          postedDate: new Date(match.jobs.posted_date).toISOString().split('T')[0],
+          applyUrl: match.jobs.apply_url,
+          salaryRange: match.jobs.salary_range,
+          lastScrapedAt: match.jobs.last_scraped_at
+        }));
+
+        setJobs(jobsWithScores);
       }
     } catch (error) {
       console.error('Error fetching jobs:', error);
@@ -128,8 +165,6 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
     );
   }
 
-  const sortedJobs = [...jobs].sort((a, b) => b.matchScore - a.matchScore);
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -145,7 +180,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         </Button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sortedJobs.map((job) => (
+        {jobs.map((job) => (
           <JobCard key={job.id} job={job} />
         ))}
       </div>

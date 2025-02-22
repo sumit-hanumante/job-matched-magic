@@ -20,6 +20,11 @@ export interface Resume {
   skills: string[];
   experience: string;
   salary?: string;
+  preferred_locations?: string[];
+  preferred_companies?: string[];
+  min_salary?: number;
+  max_salary?: number;
+  preferred_work_type?: string;
 }
 
 export interface JobMatch {
@@ -28,4 +33,10 @@ export interface JobMatch {
   jobId: string;
   matchScore: number;
   createdAt: string;
+  viewedAt?: string;
+  isShown: boolean;
+  skillMatchScore: number;
+  locationMatchScore: number;
+  companyMatchScore: number;
+  salaryMatchScore: number;
 }

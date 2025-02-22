@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.1.3"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,15 +12,15 @@ interface ParsedResume {
   skills: string[];
   experience: string;
   salary?: string;
-  location?: string;
+  preferredLocations: string[];
   education: string[];
   jobTitle: string;
-  industries: string[];
+  preferredCompanies: string[];
   languages: string[];
   certifications: string[];
   preferredWorkType?: 'remote' | 'hybrid' | 'onsite';
-  availability?: string;
-  achievements: string[];
+  minSalary?: number;
+  maxSalary?: number;
 }
 
 serve(async (req) => {
@@ -31,10 +32,14 @@ serve(async (req) => {
     const { resumeUrl, userId, resumeId } = await req.json();
 
     // Initialize Supabase client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing environment variables');
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Download resume content
     const response = await fetch(resumeUrl);
@@ -47,51 +52,71 @@ serve(async (req) => {
     }
 
     const genAI = new GoogleGenerativeAI(geminiKey);
-    // Use gemini-pro model which is available in the free tier
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     const prompt = `Analyze this resume text and extract the following information in JSON format:
-      - Top 5-10 technical skills
+      - List of technical and soft skills
       - Total years of experience
-      - Expected/current salary range (if mentioned)
-      - Preferred job location or willing to relocate information
+      - Current/expected salary range
+      - Preferred job locations or willing to relocate information
       - Educational qualifications
       - Current/Last job title
-      - Industry expertise
+      - List of companies the candidate would prefer to work for (based on past experience and industry)
       - Languages known
       - Certifications
       - Preferred work type (remote/hybrid/onsite) if mentioned
-      - Immediate availability or notice period if mentioned
-      - Key achievements or notable projects
+      - Any salary expectations mentioned
+
+      Also analyze:
+      - The type of companies they've worked for (startups, MNCs, etc.)
+      - Their career progression
+      - Industry focus
 
       Return as JSON with this structure:
       {
         "skills": [],
         "experience": "",
         "salary": "",
-        "location": "",
+        "preferredLocations": [],
         "education": [],
         "jobTitle": "",
-        "industries": [],
+        "preferredCompanies": [],
         "languages": [],
         "certifications": [],
         "preferredWorkType": "",
-        "availability": "",
-        "achievements": []
+        "minSalary": null,
+        "maxSalary": null
       }`;
 
-    // Use the free tier with safety settings
+    console.log('Analyzing resume with Gemini AI...');
     const result = await model.generateContent([text, prompt]);
     const response = await result.response;
     const parsedData = JSON.parse(response.text()) as ParsedResume;
 
     console.log('Resume parsed successfully:', parsedData);
 
+    // Extract salary range if present
+    let minSalary = null;
+    let maxSalary = null;
+    if (parsedData.salary) {
+      const numbers = parsedData.salary.match(/\d+/g);
+      if (numbers && numbers.length >= 1) {
+        minSalary = parseInt(numbers[0]) * 1000; // Assuming numbers are in K
+        maxSalary = numbers.length > 1 ? parseInt(numbers[1]) * 1000 : minSalary;
+      }
+    }
+
     // Update resume record with parsed data
     const { error: updateError } = await supabase
       .from('resumes')
       .update({
         extracted_skills: parsedData.skills,
+        experience: parsedData.experience,
+        preferred_locations: parsedData.preferredLocations,
+        preferred_companies: parsedData.preferredCompanies,
+        min_salary: minSalary,
+        max_salary: maxSalary,
+        preferred_work_type: parsedData.preferredWorkType,
         status: 'processed',
         parsed_data: parsedData
       })
@@ -99,19 +124,93 @@ serve(async (req) => {
 
     if (updateError) throw updateError;
 
-    // Delete the resume file from storage
-    const { error: deleteError } = await supabase.storage
-      .from('resumes')
-      .remove([resumeUrl.split('/').pop()]);
+    // Generate initial job matches
+    console.log('Generating initial job matches...');
+    const { data: jobs, error: jobsError } = await supabase
+      .from('jobs')
+      .select('*')
+      .order('posted_date', { ascending: false });
 
-    if (deleteError) {
-      console.error('Error deleting file:', deleteError);
-      // Continue execution even if delete fails
-    }
+    if (jobsError) throw jobsError;
+
+    // Calculate match scores for each job
+    const matchPromises = jobs.map(async (job) => {
+      const scores = {
+        skill_match_score: 0,
+        location_match_score: 0,
+        company_match_score: 0,
+        salary_match_score: 0
+      };
+
+      // Calculate skill match score
+      scores.skill_match_score = parsedData.skills.reduce((score, skill) => {
+        const skillLower = skill.toLowerCase();
+        if (job.title.toLowerCase().includes(skillLower) ||
+            job.description.toLowerCase().includes(skillLower) ||
+            (job.requirements || []).some(req => req.toLowerCase().includes(skillLower))) {
+          return score + 1;
+        }
+        return score;
+      }, 0) / parsedData.skills.length;
+
+      // Calculate location match score
+      scores.location_match_score = parsedData.preferredLocations.some(loc =>
+        job.location.toLowerCase().includes(loc.toLowerCase())
+      ) ? 1 : 0;
+
+      // Calculate company match score
+      scores.company_match_score = parsedData.preferredCompanies.some(comp =>
+        job.company.toLowerCase().includes(comp.toLowerCase())
+      ) ? 1 : 0;
+
+      // Calculate salary match score
+      if (minSalary && job.salary_range) {
+        const jobSalaryMatch = job.salary_range.match(/\d+/g);
+        if (jobSalaryMatch) {
+          const jobMinSalary = parseInt(jobSalaryMatch[0]) * 1000;
+          scores.salary_match_score = jobMinSalary >= minSalary ? 1 : 
+            jobMinSalary / minSalary;
+        }
+      }
+
+      // Calculate overall match score
+      const matchScore = Math.round(
+        (scores.skill_match_score * 0.4 +
+        scores.location_match_score * 0.25 +
+        scores.company_match_score * 0.2 +
+        scores.salary_match_score * 0.15) * 100
+      );
+
+      return {
+        user_id: userId,
+        job_id: job.id,
+        match_score: matchScore,
+        ...scores,
+        is_shown: false
+      };
+    });
+
+    const jobMatches = await Promise.all(matchPromises);
+
+    // Insert job matches
+    const { error: matchError } = await supabase
+      .from('job_matches')
+      .insert(jobMatches);
+
+    if (matchError) throw matchError;
 
     return new Response(
-      JSON.stringify({ success: true, data: parsedData }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        success: true, 
+        message: "Resume parsed and job matches generated successfully",
+        data: parsedData 
+      }),
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
     );
 
   } catch (error) {
