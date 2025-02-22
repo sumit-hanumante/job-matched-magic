@@ -3,6 +3,7 @@ import Hero from "@/components/Hero";
 import ResumeUpload from "@/components/ResumeUpload";
 import JobList from "@/components/JobList";
 import Auth from "@/components/Auth";
+import Header from "@/components/Header";
 import { useAuth } from "@/components/AuthProvider";
 import { Job } from "@/lib/types";
 
@@ -45,6 +46,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen">
+      <Header />
       <Hero />
       
       <main className="container mx-auto px-4 py-16 space-y-16">
