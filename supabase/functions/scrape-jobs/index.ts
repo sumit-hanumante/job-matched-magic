@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 
@@ -27,7 +28,6 @@ serve(async (req) => {
   try {
     console.log('Starting job scraping process...');
 
-    // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -35,15 +35,16 @@ serve(async (req) => {
 
     const allJobs: Job[] = [];
 
-    // LinkedIn Jobs API
+    // LinkedIn Jobs API (Paid)
     try {
       const scrapingAntKey = Deno.env.get('SCRAPINGANT_API_KEY');
       if (scrapingAntKey) {
-        const locations = ['Mumbai', 'Bangalore', 'Delhi', 'Pune', 'Hyderabad', 'Chennai'];
+        const locations = ['Remote', 'Mumbai', 'Bangalore', 'Delhi', 'Pune', 'Hyderabad', 'Chennai'];
         const keywords = ['Software Engineer', 'Developer', 'Data Scientist', 'DevOps', 'Frontend', 'Backend'];
         
         for (const location of locations) {
           for (const keyword of keywords) {
+            console.log(`Fetching LinkedIn jobs for ${keyword} in ${location}`);
             const url = `https://api.scrapingant.com/v2/linkedin?url=${encodeURIComponent(
               `https://linkedin.com/jobs/search?keywords=${keyword}&location=${location}&num_results=100`
             )}&x-api-key=${scrapingAntKey}`;
@@ -59,7 +60,7 @@ serve(async (req) => {
                   company: job.company,
                   location: job.location,
                   description: job.description,
-                  apply_url: job.applyUrl,
+                  apply_url: job.applyUrl || `https://linkedin.com/jobs/view/${job.jobId}`,
                   requirements: job.requirements,
                   salary_range: job.salaryRange,
                   source: 'linkedin',
@@ -67,6 +68,7 @@ serve(async (req) => {
                   applicant_count: job.applicantCount,
                 }));
               allJobs.push(...linkedinJobs);
+              console.log(`Added ${linkedinJobs.length} LinkedIn jobs from ${location} for ${keyword}`);
             }
           }
         }
@@ -75,15 +77,40 @@ serve(async (req) => {
       console.error('Error fetching LinkedIn jobs:', error);
     }
 
-    // Indeed Jobs API
+    // GitHub Jobs API (Free)
+    try {
+      console.log('Fetching GitHub jobs...');
+      const response = await fetch('https://dev.to/api/listings/search?category=job');
+      const data = await response.json();
+      
+      if (Array.isArray(data)) {
+        const githubJobs = data.map((job: any) => ({
+          title: job.title,
+          company: job.organization || job.company_name || 'Company Not Specified',
+          location: job.location || 'Remote',
+          description: job.description || job.listing_details || '',
+          apply_url: job.url || job.link || `https://dev.to/listings/${job.id}`,
+          requirements: [],
+          source: 'github',
+          external_job_id: `gh_${job.id}`,
+        }));
+        allJobs.push(...githubJobs);
+        console.log(`Added ${githubJobs.length} GitHub jobs`);
+      }
+    } catch (error) {
+      console.error('Error fetching GitHub jobs:', error);
+    }
+
+    // Indeed Jobs API (Paid)
     try {
       const apidevKey = Deno.env.get('APIDEV_API_KEY');
       if (apidevKey) {
-        const cities = ['mumbai', 'bangalore', 'delhi', 'pune', 'hyderabad', 'chennai'];
+        const cities = ['remote', 'mumbai', 'bangalore', 'delhi', 'pune', 'hyderabad', 'chennai'];
         const queries = ['software', 'developer', 'engineer', 'data scientist', 'devops'];
 
         for (const city of cities) {
           for (const query of queries) {
+            console.log(`Fetching Indeed jobs for ${query} in ${city}`);
             const url = `https://api.apidev.co/indeed?q=${encodeURIComponent(query)}&l=${city}&apikey=${apidevKey}`;
             const response = await fetch(url);
             const data = await response.json();
@@ -94,12 +121,13 @@ serve(async (req) => {
                 company: job.company,
                 location: job.location,
                 description: job.description,
-                apply_url: job.url,
+                apply_url: job.url || `https://indeed.com/viewjob?jk=${job.jobId}`,
                 salary_range: job.salary,
                 source: 'indeed',
                 external_job_id: job.jobId,
               }));
               allJobs.push(...indeedJobs);
+              console.log(`Added ${indeedJobs.length} Indeed jobs from ${city} for ${query}`);
             }
           }
         }
@@ -108,34 +136,35 @@ serve(async (req) => {
       console.error('Error fetching Indeed jobs:', error);
     }
 
-    // Google Jobs API (SerpApi)
+    // RemoteOK API (Free)
     try {
-      const serpApiKey = Deno.env.get('SERPAPI_API_KEY');
-      if (serpApiKey) {
-        const queries = ['Software Engineer India', 'Developer India', 'Data Scientist India', 'DevOps Engineer India'];
-        
-        for (const query of queries) {
-          const url = `https://serpapi.com/search?engine=google_jobs&q=${encodeURIComponent(query)}&gl=in&api_key=${serpApiKey}`;
-          const response = await fetch(url);
-          const data = await response.json();
-
-          if (data.jobs_results) {
-            const googleJobs = data.jobs_results.map((job: any) => ({
-              title: job.title,
-              company: job.company_name,
-              location: job.location,
-              description: job.description,
-              apply_url: job.job_link,
-              requirements: job.requirements,
-              source: 'google_jobs',
-              external_job_id: job.job_id,
-            }));
-            allJobs.push(...googleJobs);
-          }
+      console.log('Fetching RemoteOK jobs...');
+      const response = await fetch('https://remoteok.io/api', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
+      });
+      const data = await response.json();
+      
+      if (Array.isArray(data)) {
+        const remoteJobs = data
+          .filter((job: any) => job.position && job.company) // Filter out non-job objects
+          .map((job: any) => ({
+            title: job.position,
+            company: job.company,
+            location: 'Remote',
+            description: job.description || '',
+            apply_url: job.url || `https://remoteok.io/l/${job.id}`,
+            salary_range: job.salary,
+            requirements: [],
+            source: 'remoteok',
+            external_job_id: `rok_${job.id}`,
+          }));
+        allJobs.push(...remoteJobs);
+        console.log(`Added ${remoteJobs.length} RemoteOK jobs`);
       }
     } catch (error) {
-      console.error('Error fetching Google jobs:', error);
+      console.error('Error fetching RemoteOK jobs:', error);
     }
 
     console.log(`Total jobs collected: ${allJobs.length}`);
