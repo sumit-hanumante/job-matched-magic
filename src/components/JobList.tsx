@@ -13,13 +13,18 @@ interface JobListProps {
   jobs?: Job[];
 }
 
+interface SourceCount {
+  source: string;
+  count: number;
+}
+
 const INITIAL_JOB_LIMIT = 20;
 
 const JobList = ({ jobs: propJobs }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScrapingJobs, setIsScrapingJobs] = useState(false);
-  const [uniqueSources, setUniqueSources] = useState<{ source: string; count: number }[]>([]);
+  const [uniqueSources, setUniqueSources] = useState<SourceCount[]>([]);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -77,14 +82,14 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
 
       if (jobsData) {
         // Count jobs by source
-        const sourceCounts = jobsData.reduce((acc: Record<string, number>, job) => {
+        const sourceCounts = jobsData.reduce<Record<string, number>>((acc, job) => {
           acc[job.source] = (acc[job.source] || 0) + 1;
           return acc;
         }, {});
 
-        const sources = Object.entries(sourceCounts).map(([source, count]) => ({
+        const sources: SourceCount[] = Object.entries(sourceCounts).map(([source, count]) => ({
           source,
-          count
+          count: count
         }));
         
         setUniqueSources(sources);
