@@ -103,15 +103,24 @@ async function fetchAdzunaJobs(): Promise<Job[]> {
     const appId = Deno.env.get('ADZUNA_APP_ID');
     const appKey = Deno.env.get('ADZUNA_APP_KEY');
     
+    console.log('Adzuna credentials:', { 
+      hasAppId: !!appId, 
+      hasAppKey: !!appKey 
+    });
+
     if (!appId || !appKey) {
       console.warn('Adzuna API credentials not found');
       return [];
     }
 
     const url = `${CONFIG.adzuna.baseUrl}?app_id=${appId}&app_key=${appKey}&what=software+developer&where=india&results_per_page=50`;
+    console.log('Fetching from Adzuna URL:', url);
+    
     const response = await fetch(url);
     
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Adzuna API error response:', errorText);
       throw new Error(`Adzuna API error: ${response.status}`);
     }
 
