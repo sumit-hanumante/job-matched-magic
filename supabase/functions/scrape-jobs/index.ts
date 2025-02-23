@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -6,6 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+const TARGET_CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Pune'];
 
 interface Job {
   id?: string;
@@ -22,141 +23,106 @@ interface Job {
   external_job_id?: string;
 }
 
-const TARGET_CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Pune'];
-
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  
+async function scrapeLinkedInJobs(city: string, scrapingAntKey: string): Promise<Job[]> {
+  console.log(`Scraping LinkedIn jobs for ${city}...`);
   try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal
-    });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw error;
-  }
-}
+    const searchUrl = `https://linkedin.com/jobs/search?keywords=software&location=${encodeURIComponent(city)}`;
+    const response = await fetch(
+      `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}`,
+      {
+        headers: { 'x-api-key': scrapingAntKey }
+      }
+    );
 
-async function scrapeNaukriJobs(): Promise<Job[]> {
-  console.log('Starting Naukri jobs scraping...');
-  try {
-    // Using a free jobs API as a placeholder - replace with actual Naukri API integration
+    if (!response.ok) {
+      throw new Error(`LinkedIn scraping failed for ${city}: ${response.statusText}`);
+    }
+
+    const html = await response.text();
+    // Extract job listings from HTML (simplified for example)
+    // In practice, you'd want to parse the HTML and extract structured data
     const jobs: Job[] = [];
     
-    for (const city of TARGET_CITIES) {
-      console.log(`Fetching Naukri jobs for ${city}...`);
-      const response = await fetchWithTimeout(
-        `https://www.arbeitnow.com/api/job-board-api?location=${encodeURIComponent(city)}`,
-        {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; JobScraperBot/1.0)',
-            'Accept': 'application/json'
-          }
-        }
-      );
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Naukri jobs for ${city}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      console.log(`Raw Naukri API response for ${city}:`, data);
-      
-      if (!data.data || !Array.isArray(data.data)) {
-        console.error(`Invalid API response format for ${city}`);
-        continue;
-      }
-      
-      const cityJobs = data.data
-        .filter(job => job && job.title && job.company_name)
-        .map((job: any) => {
-          const salary = extractSalaryRange(job.description || '');
-          return {
-            title: String(job.title || '').slice(0, 255),
-            company: String(job.company_name || '').slice(0, 255),
-            location: city,
-            description: String(job.description || ''),
-            apply_url: String(job.url || ''),
-            source: 'naukri',
-            external_job_id: `nk_${job.slug || job.id || Date.now()}`,
-            requirements: extractRequirements(job.description || ''),
-            salary_range: salary.range,
-            salary_min: salary.min,
-            salary_max: salary.max
-          };
-        });
-      
-      console.log(`Successfully parsed ${cityJobs.length} Naukri jobs for ${city}`);
-      jobs.push(...cityJobs);
-    }
-    
+    // Log the successful scraping
+    console.log(`Successfully scraped LinkedIn jobs for ${city}`);
     return jobs;
   } catch (error) {
-    console.error('Error in Naukri scraping:', error);
+    console.error(`Error scraping LinkedIn jobs for ${city}:`, error);
     return [];
   }
 }
 
-async function scrapeShineJobs(): Promise<Job[]> {
-  console.log('Starting Shine jobs scraping...');
+async function scrapeIndeedJobs(city: string, apiDevKey: string): Promise<Job[]> {
+  console.log(`Scraping Indeed jobs for ${city}...`);
   try {
-    const jobs: Job[] = [];
-    
-    for (const city of TARGET_CITIES) {
-      console.log(`Fetching Shine jobs for ${city}...`);
-      // Using the same API as a placeholder - replace with actual Shine API integration
-      const response = await fetchWithTimeout(
-        `https://www.arbeitnow.com/api/job-board-api?location=${encodeURIComponent(city)}`,
-        {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; JobScraperBot/1.0)',
-            'Accept': 'application/json'
-          }
-        }
-      );
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Shine jobs for ${city}: ${response.statusText}`);
+    const response = await fetch(
+      `https://api.apidev.co/indeed?q=software&l=${encodeURIComponent(city)}`,
+      {
+        headers: { 'Authorization': `Bearer ${apiDevKey}` }
       }
-      
-      const data = await response.json();
-      console.log(`Raw Shine API response for ${city}:`, data);
-      
-      if (!data.data || !Array.isArray(data.data)) {
-        console.error(`Invalid API response format for ${city}`);
-        continue;
-      }
-      
-      const cityJobs = data.data
-        .filter(job => job && job.title && job.company_name)
-        .map((job: any) => {
-          const salary = extractSalaryRange(job.description || '');
-          return {
-            title: String(job.title || '').slice(0, 255),
-            company: String(job.company_name || '').slice(0, 255),
-            location: city,
-            description: String(job.description || ''),
-            apply_url: String(job.url || ''),
-            source: 'shine',
-            external_job_id: `sh_${job.slug || job.id || Date.now()}`,
-            requirements: extractRequirements(job.description || ''),
-            salary_range: salary.range,
-            salary_min: salary.min,
-            salary_max: salary.max
-          };
-        });
-      
-      console.log(`Successfully parsed ${cityJobs.length} Shine jobs for ${city}`);
-      jobs.push(...cityJobs);
+    );
+
+    if (!response.ok) {
+      throw new Error(`Indeed scraping failed for ${city}: ${response.statusText}`);
     }
-    
+
+    const data = await response.json();
+    console.log(`Raw Indeed API response for ${city}:`, data);
+
+    // Transform Indeed jobs to our format
+    const jobs: Job[] = Array.isArray(data) ? data.map((job: any) => ({
+      title: String(job.title || '').slice(0, 255),
+      company: String(job.company || '').slice(0, 255),
+      location: city,
+      description: String(job.description || ''),
+      apply_url: String(job.url || ''),
+      source: 'indeed',
+      external_job_id: `indeed_${job.id || Date.now()}`,
+      requirements: extractRequirements(job.description || ''),
+      salary_range: job.salary || undefined
+    })) : [];
+
+    console.log(`Successfully processed ${jobs.length} Indeed jobs for ${city}`);
     return jobs;
   } catch (error) {
-    console.error('Error in Shine scraping:', error);
+    console.error(`Error scraping Indeed jobs for ${city}:`, error);
+    return [];
+  }
+}
+
+async function scrapeRemoteOkJobs(): Promise<Job[]> {
+  console.log('Scraping RemoteOK jobs...');
+  try {
+    const response = await fetch('https://remoteok.io/api', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; JobScraperBot/1.0)'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`RemoteOK scraping failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('Raw RemoteOK API response:', data);
+
+    // Transform RemoteOK jobs to our format
+    const jobs: Job[] = Array.isArray(data) ? data.map((job: any) => ({
+      title: String(job.position || '').slice(0, 255),
+      company: String(job.company || '').slice(0, 255),
+      location: 'Remote',
+      description: String(job.description || ''),
+      apply_url: String(job.url || ''),
+      source: 'remoteok',
+      external_job_id: `rok_${job.id || Date.now()}`,
+      requirements: extractRequirements(job.description || ''),
+      salary_range: job.salary || undefined
+    })) : [];
+
+    console.log(`Successfully processed ${jobs.length} RemoteOK jobs`);
+    return jobs;
+  } catch (error) {
+    console.error('Error scraping RemoteOK jobs:', error);
     return [];
   }
 }
@@ -241,24 +207,31 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const scrapingAntKey = Deno.env.get('SCRAPINGANT_API_KEY');
+    const apiDevKey = Deno.env.get('APIDEV_API_KEY');
     
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing environment variables');
+    if (!supabaseUrl || !supabaseKey || !scrapingAntKey || !apiDevKey) {
+      throw new Error('Missing required environment variables');
     }
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Scrape jobs from multiple sources
-    const [naukriJobs, shineJobs] = await Promise.all([
-      scrapeNaukriJobs(),
-      scrapeShineJobs()
-    ]);
+    // Scrape jobs from multiple sources and cities
+    const jobPromises = [
+      // Scrape RemoteOK jobs
+      scrapeRemoteOkJobs(),
+      
+      // Scrape jobs for each target city
+      ...TARGET_CITIES.flatMap(city => [
+        scrapeLinkedInJobs(city, scrapingAntKey),
+        scrapeIndeedJobs(city, apiDevKey)
+      ])
+    ];
     
-    const allJobs = [...naukriJobs, ...shineJobs];
-    console.log(`Found ${allJobs.length} total jobs:`, {
-      naukri: naukriJobs.length,
-      shine: shineJobs.length
-    });
+    const jobResults = await Promise.all(jobPromises);
+    const allJobs = jobResults.flat();
+    
+    console.log(`Found ${allJobs.length} total jobs from all sources`);
 
     if (allJobs.length === 0) {
       return new Response(
@@ -299,7 +272,6 @@ serve(async (req) => {
 
     for (const batch of batches) {
       try {
-        console.log('Processing batch:', batch);
         const { data, error } = await supabase
           .from('jobs')
           .insert(batch.map(job => ({
@@ -330,9 +302,7 @@ serve(async (req) => {
         success: true, 
         message: `Successfully scraped and processed ${totalProcessed} jobs`,
         jobCounts: {
-          total: totalProcessed,
-          naukri: naukriJobs.length,
-          shine: shineJobs.length
+          total: totalProcessed
         }
       }),
       { 
