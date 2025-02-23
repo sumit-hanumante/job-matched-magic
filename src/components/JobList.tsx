@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -87,12 +88,17 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   };
 
   const fetchJobs = async () => {
+    console.log('Fetching jobs...');
     try {
       if (!user) {
+        console.log('No user, fetching public jobs');
         const { data: jobsData, error: jobsError } = await supabase
           .from('jobs')
           .select('*')
-          .order('posted_date', { ascending: false });
+          .order('posted_date', { ascending: false })
+          .limit(INITIAL_JOB_LIMIT);
+
+        console.log('Public jobs response:', { jobsData, jobsError });
 
         if (jobsError) throw jobsError;
 
@@ -105,18 +111,25 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
           lastScrapedAt: job.last_scraped_at
         })) || [];
 
+        console.log('Transformed jobs:', transformedJobs);
         setJobs(transformedJobs);
+        setIsLoading(false);
         return;
       }
 
+      console.log('User logged in, checking for resume');
       const hasUploadedResume = await checkForResume();
       setHasResume(hasUploadedResume);
 
       if (!hasUploadedResume) {
+        console.log('No resume, fetching random jobs');
         const { data: randomJobs, error: randomError } = await supabase
           .from('jobs')
           .select('*')
-          .order('posted_date', { ascending: false });
+          .order('posted_date', { ascending: false })
+          .limit(INITIAL_JOB_LIMIT);
+
+        console.log('Random jobs response:', { randomJobs, randomError });
 
         if (randomError) throw randomError;
 
@@ -129,10 +142,13 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
           lastScrapedAt: job.last_scraped_at
         })) || [];
 
+        console.log('Transformed random jobs:', transformedJobs);
         setJobs(transformedJobs);
+        setIsLoading(false);
         return;
       }
 
+      console.log('Has resume, fetching matched jobs');
       const { data: matchesData, error: matchesError } = await supabase
         .from('job_matches')
         .select('*, jobs(*)')
@@ -141,15 +157,20 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         .order('match_score', { ascending: false })
         .limit(DAILY_JOB_LIMIT);
 
+      console.log('Job matches response:', { matchesData, matchesError });
+
       if (matchesError) throw matchesError;
 
       if (!matchesData?.length) {
+        console.log('No new matches, fetching previously shown matches');
         const { data: shownMatches, error: shownError } = await supabase
           .from('job_matches')
           .select('*, jobs(*)')
           .eq('user_id', user.id)
           .eq('is_shown', true)
           .order('match_score', { ascending: false });
+
+        console.log('Shown matches response:', { shownMatches, shownError });
 
         if (shownError) throw shownError;
         
@@ -162,6 +183,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
           lastScrapedAt: match.jobs.last_scraped_at
         })) || [];
 
+        console.log('Transformed shown matches:', jobsWithScores);
         setJobs(jobsWithScores);
       } else {
         const jobIds = matchesData.map(match => match.job_id);
@@ -179,6 +201,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
           lastScrapedAt: match.jobs.last_scraped_at
         }));
 
+        console.log('Transformed new matches:', jobsWithScores);
         setJobs(jobsWithScores);
       }
     } catch (error) {
@@ -257,3 +280,4 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
 };
 
 export default JobList;
+
