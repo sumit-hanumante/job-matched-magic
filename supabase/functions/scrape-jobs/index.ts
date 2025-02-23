@@ -7,7 +7,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const TARGET_CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Pune'];
+// Configuration for different job sources
+const CONFIG = {
+  remoteok: {
+    enabled: true,
+    baseUrl: 'https://remoteok.com/api',
+  },
+  greenhouse: {
+    enabled: true,
+    baseUrl: 'https://boards-api.greenhouse.io/v1/boards/example/jobs', // Replace 'example' with actual board token
+  },
+  wellfound: {
+    enabled: true,
+    baseUrl: 'https://api.wellfound.com/api/v1/listings/jobs',
+  },
+  linkedin: {
+    enabled: false, // Disabled as requested
+    baseUrl: '',
+  },
+  naukri: {
+    enabled: false, // Disabled as requested
+    baseUrl: '',
+  }
+};
 
 interface Job {
   id?: string;
@@ -24,123 +46,94 @@ interface Job {
   external_job_id?: string;
 }
 
-async function scrapeLinkedInJobs(city: string, scrapingAntKey: string): Promise<Job[]> {
-  console.log(`Starting LinkedIn scraping for ${city}`);
+async function fetchRemoteOKJobs(): Promise<Job[]> {
+  console.log('Fetching RemoteOK jobs...');
   try {
-    const searchUrl = `https://www.linkedin.com/jobs/search?keywords=software%20developer&location=${encodeURIComponent(city)}%2C%20India&position=1&pageNum=0`;
-    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}&browser=false`;
-
-    const response = await fetch(scrapingUrl, {
-      headers: {
-        'x-api-key': scrapingAntKey,
-        'Accept': 'application/json'
-      }
-    });
-
+    const response = await fetch(CONFIG.remoteok.baseUrl);
+    
     if (!response.ok) {
-      throw new Error(`LinkedIn scraping failed: ${response.status}`);
+      throw new Error(`RemoteOK API error: ${response.status}`);
     }
 
-    const html = await response.text();
-    console.log('LinkedIn HTML length:', html.length);
+    const jobs = await response.json();
+    console.log(`RemoteOK jobs fetched:`, jobs.length);
 
-    // For now returning test jobs
-    return Array(3).fill(null).map((_, index) => ({
-      title: `Software Developer ${index + 1}`,
-      company: `LinkedIn Company ${index + 1}`,
-      location: city,
-      description: `Test LinkedIn job description ${index + 1}`,
-      apply_url: `https://linkedin.com/jobs/test/${index + 1}`,
-      source: "linkedin",
-      external_job_id: `li_${Date.now()}_${index}`
+    // Skip the first item as it's typically metadata
+    return jobs.slice(1).map((job: any) => ({
+      title: job.position,
+      company: job.company,
+      location: job.location || 'Remote',
+      description: job.description,
+      apply_url: job.url,
+      salary_range: job.salary,
+      source: 'remoteok',
+      external_job_id: `ro_${job.id}`,
+      requirements: job.tags
     }));
   } catch (error) {
-    console.error('LinkedIn scraping error:', error);
+    console.error('RemoteOK fetching error:', error);
     return [];
   }
 }
 
-async function scrapeNaukriJobs(city: string, scrapingAntKey: string): Promise<Job[]> {
-  console.log(`Starting Naukri scraping for ${city}`);
+async function fetchGreenhouseJobs(): Promise<Job[]> {
+  console.log('Fetching Greenhouse jobs...');
   try {
-    // Instead of directly scraping, we'll use their search results page with fewer restrictions
-    const searchUrl = `https://www.naukri.com/jobapi/v3/search?noOfResults=20&urlType=search_by_key_loc&searchType=adv&keyword=software%20developer&location=${encodeURIComponent(city)}&k=software%20developer&l=${encodeURIComponent(city)}`;
-    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}&browser=false&proxy_country=IN`;
-
-    const response = await fetch(scrapingUrl, {
-      headers: {
-        'x-api-key': scrapingAntKey,
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
-
+    const response = await fetch(CONFIG.greenhouse.baseUrl);
+    
     if (!response.ok) {
-      console.warn(`Naukri API request failed for ${city}, using fallback data`);
-      // Return fallback test data instead of throwing
-      return Array(3).fill(null).map((_, index) => ({
-        title: `Software Developer ${index + 1}`,
-        company: `Naukri Company ${index + 1}`,
-        location: city,
-        description: `Test Naukri job description ${index + 1}`,
-        apply_url: `https://naukri.com/jobs/test/${index + 1}`,
-        source: "naukri",
-        external_job_id: `naukri_${Date.now()}_${index}`
-      }));
+      throw new Error(`Greenhouse API error: ${response.status}`);
     }
 
-    const html = await response.text();
-    console.log('Naukri HTML length:', html.length);
+    const data = await response.json();
+    console.log(`Greenhouse jobs fetched:`, data.jobs?.length);
 
-    // Return test data for now
-    return Array(3).fill(null).map((_, index) => ({
-      title: `Software Developer ${index + 1}`,
-      company: `Naukri Company ${index + 1}`,
-      location: city,
-      description: `Test Naukri job description ${index + 1}`,
-      apply_url: `https://naukri.com/jobs/test/${index + 1}`,
-      source: "naukri",
-      external_job_id: `naukri_${Date.now()}_${index}`
+    return data.jobs.map((job: any) => ({
+      title: job.title,
+      company: job.company_name || 'Via Greenhouse',
+      location: job.location?.name || 'Various',
+      description: job.content,
+      apply_url: job.absolute_url,
+      source: 'greenhouse',
+      external_job_id: `gh_${job.id}`,
+      requirements: job.metadata?.requirements || []
     }));
   } catch (error) {
-    console.error('Naukri scraping error:', error);
-    // Return empty array instead of throwing
+    console.error('Greenhouse fetching error:', error);
     return [];
   }
 }
 
-async function scrapeIndeedJobs(city: string, scrapingAntKey: string): Promise<Job[]> {
-  console.log(`Starting Indeed scraping for ${city}`);
+async function fetchWellfoundJobs(): Promise<Job[]> {
+  console.log('Fetching Wellfound jobs...');
   try {
-    const searchUrl = `https://www.indeed.co.in/jobs?q=software+developer&l=${encodeURIComponent(city)}`;
-    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}&browser=false&proxy_country=IN`;
-
-    const response = await fetch(scrapingUrl, {
+    // Note: Wellfound API might require authentication
+    const response = await fetch(CONFIG.wellfound.baseUrl, {
       headers: {
-        'x-api-key': scrapingAntKey,
-        'Accept': 'application/json'
+        'Authorization': `Bearer ${Deno.env.get('WELLFOUND_API_KEY')}`,
       }
     });
-
+    
     if (!response.ok) {
-      throw new Error(`Indeed scraping failed: ${response.status}`);
+      throw new Error(`Wellfound API error: ${response.status}`);
     }
 
-    const html = await response.text();
-    console.log('Indeed HTML length:', html.length);
+    const data = await response.json();
+    console.log(`Wellfound jobs fetched:`, data.jobs?.length);
 
-    // Return test data for now
-    return Array(3).fill(null).map((_, index) => ({
-      title: `Software Developer ${index + 1}`,
-      company: `Indeed Company ${index + 1}`,
-      location: city,
-      description: `Test Indeed job description ${index + 1}`,
-      apply_url: `https://indeed.com/jobs/test/${index + 1}`,
-      source: "indeed",
-      external_job_id: `indeed_${Date.now()}_${index}`
+    return data.jobs.map((job: any) => ({
+      title: job.title,
+      company: job.company.name,
+      location: job.location,
+      description: job.description,
+      apply_url: job.application_url,
+      salary_range: `${job.min_salary || ''} - ${job.max_salary || ''}`,
+      source: 'wellfound',
+      external_job_id: `wf_${job.id}`,
+      requirements: job.skills || []
     }));
   } catch (error) {
-    console.error('Indeed scraping error:', error);
+    console.error('Wellfound fetching error:', error);
     return [];
   }
 }
@@ -151,34 +144,40 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting job scraping process...');
+    console.log('Starting job fetching process...');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const scrapingAntKey = Deno.env.get('SCRAPINGANT_API_KEY');
     
-    if (!supabaseUrl || !supabaseKey || !scrapingAntKey) {
+    if (!supabaseUrl || !supabaseKey) {
       throw new Error('Missing required environment variables');
     }
     
     console.log('Environment variables loaded successfully');
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    let allJobs: Job[] = [];
-
-    // Scrape jobs from all sources for each city
-    for (const city of TARGET_CITIES) {
-      console.log(`Processing city: ${city}`);
-      const [linkedInJobs, naukriJobs, indeedJobs] = await Promise.all([
-        scrapeLinkedInJobs(city, scrapingAntKey),
-        scrapeNaukriJobs(city, scrapingAntKey),
-        scrapeIndeedJobs(city, scrapingAntKey)
-      ]);
-
-      allJobs = [...allJobs, ...linkedInJobs, ...naukriJobs, ...indeedJobs];
+    // Fetch jobs from all enabled sources
+    const jobPromises = [];
+    
+    if (CONFIG.remoteok.enabled) {
+      jobPromises.push(fetchRemoteOKJobs());
+    }
+    if (CONFIG.greenhouse.enabled) {
+      jobPromises.push(fetchGreenhouseJobs());
+    }
+    if (CONFIG.wellfound.enabled) {
+      jobPromises.push(fetchWellfoundJobs());
     }
 
-    console.log(`Total jobs scraped: ${allJobs.length}`);
+    const jobArrays = await Promise.allSettled(jobPromises);
+    console.log('Job fetching results:', jobArrays);
+
+    // Filter out rejected promises and flatten the array
+    const allJobs = jobArrays
+      .filter((result): result is PromiseFulfilledResult<Job[]> => result.status === 'fulfilled')
+      .flatMap(result => result.value);
+
+    console.log(`Total jobs fetched: ${allJobs.length}`);
 
     if (allJobs.length === 0) {
       return new Response(
@@ -208,15 +207,20 @@ serve(async (req) => {
       throw error;
     }
 
+    // Return detailed response for monitoring
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Successfully scraped and processed ${allJobs.length} jobs`,
-        jobCounts: {
-          linkedin: allJobs.filter(j => j.source === 'linkedin').length,
-          naukri: allJobs.filter(j => j.source === 'naukri').length,
-          indeed: allJobs.filter(j => j.source === 'indeed').length
-        }
+        message: `Successfully processed ${allJobs.length} jobs`,
+        stats: {
+          total: allJobs.length,
+          bySource: {
+            remoteok: allJobs.filter(j => j.source === 'remoteok').length,
+            greenhouse: allJobs.filter(j => j.source === 'greenhouse').length,
+            wellfound: allJobs.filter(j => j.source === 'wellfound').length
+          }
+        },
+        timestamp: new Date().toISOString()
       }),
       { 
         status: 200,
@@ -225,10 +229,11 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Fatal error in scrape-jobs function:', error);
+    console.error('Fatal error in job fetching:', error);
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        timestamp: new Date().toISOString()
       }),
       { 
         status: 500,
