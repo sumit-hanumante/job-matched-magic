@@ -13,21 +13,13 @@ const CONFIG = {
     enabled: true,
     baseUrl: 'https://remoteok.com/api',
   },
-  greenhouse: {
+  arbeitnow: {
     enabled: true,
-    baseUrl: 'https://boards-api.greenhouse.io/v1/boards/example/jobs', // Replace 'example' with actual board token
+    baseUrl: 'https://www.arbeitnow.com/api/job-board-api',
   },
-  wellfound: {
+  adzuna: {
     enabled: true,
-    baseUrl: 'https://api.wellfound.com/api/v1/listings/jobs',
-  },
-  linkedin: {
-    enabled: false, // Disabled as requested
-    baseUrl: '',
-  },
-  naukri: {
-    enabled: false, // Disabled as requested
-    baseUrl: '',
+    baseUrl: 'https://api.adzuna.com/v1/api/jobs/in/search/1',
   }
 };
 
@@ -76,64 +68,72 @@ async function fetchRemoteOKJobs(): Promise<Job[]> {
   }
 }
 
-async function fetchGreenhouseJobs(): Promise<Job[]> {
-  console.log('Fetching Greenhouse jobs...');
+async function fetchArbeitnowJobs(): Promise<Job[]> {
+  console.log('Fetching Arbeitnow jobs...');
   try {
-    const response = await fetch(CONFIG.greenhouse.baseUrl);
+    const response = await fetch(CONFIG.arbeitnow.baseUrl);
     
     if (!response.ok) {
-      throw new Error(`Greenhouse API error: ${response.status}`);
+      throw new Error(`Arbeitnow API error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log(`Greenhouse jobs fetched:`, data.jobs?.length);
+    console.log(`Arbeitnow jobs fetched:`, data.data?.length);
 
-    return data.jobs.map((job: any) => ({
+    return data.data.map((job: any) => ({
       title: job.title,
-      company: job.company_name || 'Via Greenhouse',
-      location: job.location?.name || 'Various',
-      description: job.content,
-      apply_url: job.absolute_url,
-      source: 'greenhouse',
-      external_job_id: `gh_${job.id}`,
-      requirements: job.metadata?.requirements || []
+      company: job.company_name,
+      location: job.location || 'Remote',
+      description: job.description,
+      apply_url: job.url,
+      source: 'arbeitnow',
+      external_job_id: `an_${job.slug}`,
+      requirements: [], // Arbeitnow doesn't provide requirements as separate field
+      salary_range: job.salary
     }));
   } catch (error) {
-    console.error('Greenhouse fetching error:', error);
+    console.error('Arbeitnow fetching error:', error);
     return [];
   }
 }
 
-async function fetchWellfoundJobs(): Promise<Job[]> {
-  console.log('Fetching Wellfound jobs...');
+async function fetchAdzunaJobs(): Promise<Job[]> {
+  console.log('Fetching Adzuna jobs...');
   try {
-    // Note: Wellfound API might require authentication
-    const response = await fetch(CONFIG.wellfound.baseUrl, {
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('WELLFOUND_API_KEY')}`,
-      }
-    });
+    const appId = Deno.env.get('ADZUNA_APP_ID');
+    const appKey = Deno.env.get('ADZUNA_APP_KEY');
+    
+    if (!appId || !appKey) {
+      console.warn('Adzuna API credentials not found');
+      return [];
+    }
+
+    const url = `${CONFIG.adzuna.baseUrl}?app_id=${appId}&app_key=${appKey}&what=software+developer&where=india&results_per_page=50`;
+    const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`Wellfound API error: ${response.status}`);
+      throw new Error(`Adzuna API error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log(`Wellfound jobs fetched:`, data.jobs?.length);
+    console.log(`Adzuna jobs fetched:`, data.results?.length);
 
-    return data.jobs.map((job: any) => ({
+    return data.results.map((job: any) => ({
       title: job.title,
-      company: job.company.name,
-      location: job.location,
+      company: job.company.display_name,
+      location: job.location.display_name,
       description: job.description,
-      apply_url: job.application_url,
-      salary_range: `${job.min_salary || ''} - ${job.max_salary || ''}`,
-      source: 'wellfound',
-      external_job_id: `wf_${job.id}`,
-      requirements: job.skills || []
+      apply_url: job.redirect_url,
+      source: 'adzuna',
+      external_job_id: `az_${job.id}`,
+      requirements: [], // Adzuna doesn't provide requirements as separate field
+      salary_range: job.salary_min && job.salary_max ? 
+        `${job.salary_min} - ${job.salary_max}` : undefined,
+      salary_min: job.salary_min,
+      salary_max: job.salary_max
     }));
   } catch (error) {
-    console.error('Wellfound fetching error:', error);
+    console.error('Adzuna fetching error:', error);
     return [];
   }
 }
@@ -162,11 +162,11 @@ serve(async (req) => {
     if (CONFIG.remoteok.enabled) {
       jobPromises.push(fetchRemoteOKJobs());
     }
-    if (CONFIG.greenhouse.enabled) {
-      jobPromises.push(fetchGreenhouseJobs());
+    if (CONFIG.arbeitnow.enabled) {
+      jobPromises.push(fetchArbeitnowJobs());
     }
-    if (CONFIG.wellfound.enabled) {
-      jobPromises.push(fetchWellfoundJobs());
+    if (CONFIG.adzuna.enabled) {
+      jobPromises.push(fetchAdzunaJobs());
     }
 
     const jobArrays = await Promise.allSettled(jobPromises);
@@ -216,8 +216,8 @@ serve(async (req) => {
           total: allJobs.length,
           bySource: {
             remoteok: allJobs.filter(j => j.source === 'remoteok').length,
-            greenhouse: allJobs.filter(j => j.source === 'greenhouse').length,
-            wellfound: allJobs.filter(j => j.source === 'wellfound').length
+            arbeitnow: allJobs.filter(j => j.source === 'arbeitnow').length,
+            adzuna: allJobs.filter(j => j.source === 'adzuna').length
           }
         },
         timestamp: new Date().toISOString()

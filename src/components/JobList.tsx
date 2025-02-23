@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -71,7 +70,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
       const sourcesQuery = await supabase
         .from('jobs')
         .select('source', { count: 'exact' })
-        .limit(1000); // Get a reasonable number of rows
+        .limit(1000);
       
       if (sourcesQuery.data) {
         const sources = [...new Set(sourcesQuery.data.map(item => item.source))];
@@ -83,7 +82,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
       const { data: jobsData, error: jobsError } = await supabase
         .from('jobs')
         .select('*')
-        .in('source', ['remoteok', 'greenhouse', 'wellfound']) // Only fetch from legal sources
+        .in('source', ['remoteok', 'arbeitnow', 'adzuna']) // Updated legal sources
         .order('posted_date', { ascending: false })
         .limit(INITIAL_JOB_LIMIT);
 
@@ -142,7 +141,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
     );
   }
 
-  const legalSources = ['remoteok', 'greenhouse', 'wellfound'];
+  const legalSources = ['remoteok', 'arbeitnow', 'adzuna'];
   const activeSources = uniqueSources.filter(source => legalSources.includes(source));
 
   return (
