@@ -95,20 +95,96 @@ async function fetchArbeitnowJobs(): Promise<Job[]> {
   }
 }
 
+async function testAdzunaIntegration() {
+  console.log('Running Adzuna integration test...');
+  
+  const appId = Deno.env.get('ADZUNA_APP_ID');
+  const appKey = Deno.env.get('ADZUNA_APP_KEY');
+  
+  console.log('API Credentials:', {
+    hasAppId: !!appId,
+    appIdLength: appId?.length,
+    hasAppKey: !!appKey,
+    appKeyLength: appKey?.length
+  });
+
+  // Test URL construction
+  const params = new URLSearchParams({
+    app_id: appId || '',
+    app_key: appKey || '',
+    results_per_page: '1', // Just get 1 result for testing
+    what: 'software developer',
+    where: 'india',
+    category: 'it-jobs',
+    country: 'in',
+    content_type: 'application/json'
+  });
+
+  const testUrl = `${CONFIG.adzuna.baseUrl}?${params.toString()}`;
+  console.log('Test URL:', testUrl);
+
+  try {
+    // Make test request
+    const response = await fetch(testUrl);
+    const responseText = await response.text();
+    
+    console.log('Adzuna Test Response:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      body: responseText.slice(0, 500) + '...' // Log first 500 chars
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}: ${response.statusText}`);
+    }
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.log('Parsed Response:', {
+        count: data.count,
+        hasResults: !!data.results,
+        resultsLength: data.results?.length,
+        sample: data.results?.[0]
+      });
+    } catch (e) {
+      throw new Error(`Failed to parse JSON: ${e.message}`);
+    }
+
+    return {
+      success: true,
+      message: 'Integration test successful',
+      data: data
+    };
+  } catch (error) {
+    console.error('Integration test failed:', error);
+    return {
+      success: false,
+      message: error.message,
+      error: error
+    };
+  }
+}
+
 async function fetchAdzunaJobs(): Promise<Job[]> {
   console.log('Fetching Adzuna jobs for India...');
+  
+  // Run integration test first
+  const testResult = await testAdzunaIntegration();
+  console.log('Integration test result:', testResult);
+  
+  if (!testResult.success) {
+    console.error('Skipping Adzuna job fetch due to failed integration test');
+    return [];
+  }
+
   try {
     const appId = Deno.env.get('ADZUNA_APP_ID');
     const appKey = Deno.env.get('ADZUNA_APP_KEY');
     
-    console.log('Checking Adzuna credentials...', { 
-      hasAppId: !!appId, 
-      hasAppKey: !!appKey 
-    });
-
     if (!appId || !appKey) {
-      console.warn('Adzuna API credentials missing');
-      return [];
+      throw new Error('Adzuna API credentials missing');
     }
 
     const params = new URLSearchParams({
@@ -119,44 +195,32 @@ async function fetchAdzunaJobs(): Promise<Job[]> {
       where: 'india',
       category: 'it-jobs',
       country: 'in',
-      sort_by: 'date',
-      full_time: '1',
       content_type: 'application/json'
     });
 
     const url = `${CONFIG.adzuna.baseUrl}?${params.toString()}`;
-    console.log('Fetching from Adzuna URL:', url);
-
     const response = await fetch(url);
-    const responseText = await response.text(); // Get raw response text first
-    console.log('Raw Adzuna response:', responseText);
+    const responseText = await response.text();
     
     if (!response.ok) {
-      console.error('Adzuna API error:', {
-        status: response.status,
-        statusText: response.statusText,
-        response: responseText
-      });
-      return [];
+      throw new Error(`Adzuna API error: ${response.status} ${response.statusText}`);
     }
 
     let data;
     try {
       data = JSON.parse(responseText);
     } catch (e) {
-      console.error('Failed to parse Adzuna response:', e);
-      return [];
+      throw new Error(`Failed to parse Adzuna response: ${e.message}`);
     }
 
-    console.log('Parsed Adzuna response:', {
+    console.log('Adzuna API Response:', {
       count: data.count,
       resultsCount: data.results?.length,
-      sample: data.results?.[0]
+      firstJob: data.results?.[0]
     });
 
     if (!data.results || !Array.isArray(data.results) || data.results.length === 0) {
-      console.warn('No results found in Adzuna response');
-      return [];
+      throw new Error('No results found in Adzuna response');
     }
 
     const jobs = data.results.map((job: any) => {
@@ -174,7 +238,6 @@ async function fetchAdzunaJobs(): Promise<Job[]> {
         salary_max: undefined as number | undefined
       };
 
-      // Handle salary information
       if (job.salary_min || job.salary_max) {
         const min = Math.round(job.salary_min);
         const max = Math.round(job.salary_max);
@@ -193,8 +256,6 @@ async function fetchAdzunaJobs(): Promise<Job[]> {
     });
 
     console.log(`Successfully processed ${jobs.length} Adzuna jobs`);
-    console.log('Sample job:', jobs[0]);
-
     return jobs;
   } catch (error) {
     console.error('Adzuna fetching error:', error);
