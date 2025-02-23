@@ -21,39 +21,60 @@ interface Job {
 }
 
 async function scrapeRemoteOkJobs(): Promise<Job[]> {
-  console.log('Scraping RemoteOK jobs...');
+  console.log('Starting RemoteOK jobs scraping...');
   try {
-    const response = await fetch('https://remoteok.com/api', {
+    // Use a different API endpoint that's more reliable
+    const response = await fetch('https://remoteok.io/api?api=1', {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (compatible; JobScraperBot/1.0)',
         'Accept': 'application/json'
       }
     });
     
     if (!response.ok) {
-      console.error('RemoteOK API error:', response.status, response.statusText);
-      throw new Error('Failed to fetch RemoteOK jobs');
+      console.error('RemoteOK API error:', {
+        status: response.status,
+        statusText: response.statusText
+      });
+      throw new Error(`Failed to fetch RemoteOK jobs: ${response.statusText}`);
     }
     
-    const data = await response.json();
-    console.log('RemoteOK raw response:', JSON.stringify(data).slice(0, 200) + '...');
+    const text = await response.text();
+    console.log('RemoteOK raw response preview:', text.slice(0, 200));
     
-    // Remove the first item as it's usually metadata
-    const jobs = Array.isArray(data) ? data.slice(1) : [];
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (error) {
+      console.error('Failed to parse RemoteOK response:', error);
+      return [];
+    }
     
-    return jobs.map((job: any) => ({
-      title: job.position || job.title || 'Unknown Position',
-      company: job.company || 'Unknown Company',
-      location: job.location || 'Remote',
-      description: job.description || '',
-      apply_url: job.url || job.apply_url || '',
-      source: 'remoteok',
-      external_job_id: `rok_${job.id}`,
-      requirements: extractRequirements(job.description || ''),
-      salary_range: job.salary || extractSalaryRange(job.description || '')
-    }));
+    if (!Array.isArray(data)) {
+      console.error('RemoteOK response is not an array:', typeof data);
+      return [];
+    }
+    
+    // Filter out any non-job objects and map to our job format
+    const jobs = data
+      .filter(item => item && typeof item === 'object' && 'position' in item)
+      .map((job: any) => ({
+        title: job.position || job.title || 'Unknown Position',
+        company: job.company || 'Unknown Company',
+        location: job.location || 'Remote',
+        description: job.description || '',
+        apply_url: job.url || job.apply_url || '',
+        source: 'remoteok',
+        external_job_id: `rok_${job.id}`,
+        requirements: extractRequirements(job.description || ''),
+        salary_range: job.salary || extractSalaryRange(job.description || '')
+      }));
+    
+    console.log(`Successfully parsed ${jobs.length} RemoteOK jobs`);
+    return jobs;
+    
   } catch (error) {
-    console.error('Error scraping RemoteOK jobs:', error);
+    console.error('Error in RemoteOK scraping:', error);
     return [];
   }
 }
@@ -138,57 +159,68 @@ serve(async (req) => {
     const remoteOkJobs = await scrapeRemoteOkJobs();
     console.log(`Found ${remoteOkJobs.length} RemoteOK jobs`);
 
-    const allJobs = [...remoteOkJobs];
-
-    // Insert new jobs into the database
-    if (allJobs.length > 0) {
-      // First, mark old jobs as expired
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      await supabase
-        .from('jobs')
-        .delete()
-        .lt('posted_date', thirtyDaysAgo.toISOString());
-
-      // Insert new jobs
-      const { data: newJobs, error } = await supabase
-        .from('jobs')
-        .upsert(
-          allJobs.map(job => ({
-            ...job,
-            posted_date: new Date().toISOString(),
-            last_scraped_at: new Date().toISOString()
-          })),
-          { 
-            onConflict: 'external_job_id',
-            ignoreDuplicates: true 
-          }
-        );
-
-      if (error) {
-        console.error('Error upserting jobs:', error);
-        throw error;
-      }
-
-      console.log(`Successfully inserted/updated jobs. New jobs count: ${newJobs?.length || 0}`);
+    // Only proceed if we have jobs to process
+    if (remoteOkJobs.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'No jobs found from any source'
+        }),
+        { 
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
+
+    // Delete old jobs first
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { error: deleteError } = await supabase
+      .from('jobs')
+      .delete()
+      .lt('posted_date', thirtyDaysAgo.toISOString());
+
+    if (deleteError) {
+      console.error('Error deleting old jobs:', deleteError);
+      throw deleteError;
+    }
+
+    // Insert new jobs
+    const { data: newJobs, error: insertError } = await supabase
+      .from('jobs')
+      .upsert(
+        remoteOkJobs.map(job => ({
+          ...job,
+          posted_date: new Date().toISOString(),
+          last_scraped_at: new Date().toISOString()
+        })),
+        { 
+          onConflict: 'external_job_id',
+          ignoreDuplicates: true 
+        }
+      );
+
+    if (insertError) {
+      console.error('Error upserting jobs:', insertError);
+      throw insertError;
+    }
+
+    console.log(`Successfully processed ${newJobs?.length || 0} jobs`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Successfully scraped and processed ${allJobs.length} jobs`,
+        message: `Successfully scraped and processed ${remoteOkJobs.length} jobs`,
         jobCounts: {
           remoteok: remoteOkJobs.length,
-          total: allJobs.length
+          total: remoteOkJobs.length
         }
       }),
       { 
         status: 200,
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
 
