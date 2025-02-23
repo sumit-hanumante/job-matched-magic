@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -19,7 +18,7 @@ const CONFIG = {
   },
   adzuna: {
     enabled: true,
-    baseUrl: 'https://api.adzuna.com/v1/api/jobs/gb/search/1',  // Changed to 'gb' as default region
+    baseUrl: 'https://api.adzuna.com/v1/api/jobs/in/search/1',  // Changed to 'in' for India
   }
 };
 
@@ -97,7 +96,7 @@ async function fetchArbeitnowJobs(): Promise<Job[]> {
 }
 
 async function fetchAdzunaJobs(): Promise<Job[]> {
-  console.log('Fetching Adzuna jobs...');
+  console.log('Fetching Adzuna jobs for India...');
   try {
     const appId = Deno.env.get('ADZUNA_APP_ID');
     const appKey = Deno.env.get('ADZUNA_APP_KEY');
@@ -118,6 +117,8 @@ async function fetchAdzunaJobs(): Promise<Job[]> {
     url.searchParams.append('what', 'software developer');
     url.searchParams.append('results_per_page', '50');
     url.searchParams.append('content-type', 'application/json');
+    url.searchParams.append('where', 'india');  // Added location filter for India
+    url.searchParams.append('category', 'it-jobs');  // Added IT jobs category
 
     console.log('Fetching from Adzuna URL:', url.toString());
     
@@ -130,13 +131,14 @@ async function fetchAdzunaJobs(): Promise<Job[]> {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Adzuna API error response:', errorText);
-      return []; // Return empty array instead of throwing
+      return [];
     }
 
     const data = await response.json();
+    console.log('Raw Adzuna response:', data); // Added more detailed logging
     console.log(`Adzuna jobs fetched:`, data.results?.length || 0);
 
-    if (!data.results) {
+    if (!data.results || data.results.length === 0) {
       console.warn('No results found in Adzuna response');
       return [];
     }
