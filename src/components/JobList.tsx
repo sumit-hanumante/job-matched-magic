@@ -67,23 +67,25 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const fetchJobs = async () => {
     console.log('Fetching jobs...');
     try {
-      // For testing: Only fetch LinkedIn jobs and log unique sources
+      // Get unique sources first using a separate query
+      const sourcesQuery = await supabase
+        .from('jobs')
+        .select('source', { count: 'exact' })
+        .limit(1000); // Get a reasonable number of rows
+      
+      if (sourcesQuery.data) {
+        const sources = [...new Set(sourcesQuery.data.map(item => item.source))];
+        setUniqueSources(sources);
+        console.log('Unique job sources in database:', sources);
+      }
+
+      // For testing: Only fetch LinkedIn jobs
       const { data: jobsData, error: jobsError } = await supabase
         .from('jobs')
         .select('*')
         .eq('source', 'linkedin') // Filter for LinkedIn jobs only
         .order('posted_date', { ascending: false })
         .limit(INITIAL_JOB_LIMIT);
-
-      // Get unique sources for debugging
-      const { data: sourcesData } = await supabase
-        .from('jobs')
-        .select('source')
-        .distinct();
-      
-      const sources = sourcesData?.map(item => item.source) || [];
-      setUniqueSources(sources);
-      console.log('Unique job sources in database:', sources);
 
       console.log('Jobs response:', { jobsData, jobsError });
 
