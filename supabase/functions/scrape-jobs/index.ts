@@ -56,7 +56,7 @@ async function scrapeFindeJobsApi(): Promise<Job[]> {
     }
     
     const data = await response.json();
-    console.log('Finde.jobs raw response preview:', JSON.stringify(data).slice(0, 200));
+    console.log('Raw API response:', data);
     
     if (!data.data || !Array.isArray(data.data)) {
       console.error('Invalid API response format');
@@ -66,17 +66,21 @@ async function scrapeFindeJobsApi(): Promise<Job[]> {
     // Clean and validate job data before returning
     const jobs = data.data
       .filter(job => job && job.title && job.company_name && job.url) // Only keep valid jobs
-      .map((job: any) => ({
-        title: String(job.title).slice(0, 255), // Ensure string and limit length
-        company: String(job.company_name).slice(0, 255),
-        location: String(job.location || 'Remote').slice(0, 255),
-        description: String(job.description || ''),
-        apply_url: String(job.url),
-        source: 'findejobs',
-        external_job_id: `fj_${job.slug}`,
-        requirements: extractRequirements(job.description || ''),
-        salary_range: extractSalaryRange(job.description || '')
-      }));
+      .map((job: any) => {
+        const mappedJob = {
+          title: String(job.title || '').slice(0, 255),
+          company: String(job.company_name || '').slice(0, 255),
+          location: String(job.location || 'Remote').slice(0, 255),
+          description: String(job.description || ''),
+          apply_url: String(job.url || ''),
+          source: 'findejobs',
+          external_job_id: `fj_${job.slug || job.id || Date.now()}`,
+          requirements: extractRequirements(job.description || ''),
+          salary_range: extractSalaryRange(job.description || '')
+        };
+        console.log('Mapped job:', mappedJob);
+        return mappedJob;
+      });
     
     console.log(`Successfully parsed ${jobs.length} jobs from Finde.jobs`);
     return jobs;
@@ -194,8 +198,8 @@ serve(async (req) => {
       throw deleteError;
     }
 
-    // Process jobs in smaller batches to avoid timeouts
-    const batchSize = 20;
+    // Process jobs in smaller batches
+    const batchSize = 10;
     const batches = [];
     for (let i = 0; i < jobs.length; i += batchSize) {
       batches.push(jobs.slice(i, i + batchSize));
@@ -205,24 +209,28 @@ serve(async (req) => {
     console.log(`Processing ${batches.length} batches of jobs...`);
 
     for (const batch of batches) {
-      const { data: newJobs, error: insertError } = await supabase
-        .from('jobs')
-        .upsert(
-          batch.map(job => ({
+      try {
+        console.log('Processing batch:', batch);
+        const { data, error } = await supabase
+          .from('jobs')
+          .insert(batch.map(job => ({
             ...job,
             posted_date: new Date().toISOString(),
             last_scraped_at: new Date().toISOString()
-          }))
-        );
+          })))
+          .select();
 
-      if (insertError) {
-        console.error('Error upserting jobs batch:', insertError);
-        continue;
-      }
+        if (error) {
+          console.error('Error inserting jobs batch:', error);
+          continue;
+        }
 
-      if (newJobs) {
-        totalProcessed += newJobs.length;
-        console.log(`Processed batch of ${newJobs.length} jobs. Total: ${totalProcessed}`);
+        if (data) {
+          totalProcessed += data.length;
+          console.log(`Successfully inserted ${data.length} jobs in batch. Total: ${totalProcessed}`);
+        }
+      } catch (error) {
+        console.error('Error processing batch:', error);
       }
     }
 
