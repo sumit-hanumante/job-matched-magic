@@ -25,53 +25,100 @@ interface Job {
 }
 
 async function scrapeLinkedInJobs(city: string, scrapingAntKey: string): Promise<Job[]> {
-  console.log(`Starting LinkedIn scraping for ${city} with key length: ${scrapingAntKey.length}`);
+  console.log(`Starting LinkedIn scraping for ${city}`);
   try {
     const searchUrl = `https://www.linkedin.com/jobs/search?keywords=software%20developer&location=${encodeURIComponent(city)}%2C%20India&position=1&pageNum=0`;
-    console.log(`LinkedIn search URL: ${searchUrl}`);
-    
     const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}`;
-    console.log(`Calling ScrapingAnt URL: ${scrapingUrl}`);
 
-    const fetchOptions = {
-      method: 'GET',
-      headers: { 
-        'x-api-key': scrapingAntKey,
-        'accept': 'text/html,application/xhtml+xml'
-      }
-    };
-    console.log('Fetch options:', JSON.stringify(fetchOptions, null, 2));
-
-    const response = await fetch(scrapingUrl, fetchOptions);
-    console.log('ScrapingAnt Response Status:', response.status);
-    console.log('ScrapingAnt Response Headers:', JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+    const response = await fetch(scrapingUrl, {
+      headers: { 'x-api-key': scrapingAntKey }
+    });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('ScrapingAnt Error Response:', errorText);
-      throw new Error(`LinkedIn scraping failed: ${response.status} ${response.statusText}`);
+      throw new Error(`LinkedIn scraping failed: ${response.status}`);
     }
 
     const html = await response.text();
-    console.log('Received HTML content length:', html.length);
-    console.log('First 500 chars of HTML:', html.substring(0, 500));
+    console.log('LinkedIn HTML length:', html.length);
 
-    // For now, let's return a test job to verify the pipeline
-    const testJob: Job = {
-      title: "Test Software Developer Position",
+    // For now returning a test job
+    return [{
+      title: "Software Developer",
       company: "Test Company",
       location: city,
-      description: "This is a test job to verify the scraping pipeline",
-      apply_url: "https://linkedin.com/jobs",
+      description: "Test LinkedIn job description",
+      apply_url: "https://linkedin.com/jobs/test",
       source: "linkedin",
-      external_job_id: `li_test_${Date.now()}`,
-      requirements: ["Testing"]
-    };
-
-    return [testJob];
+      external_job_id: `li_${Date.now()}`
+    }];
   } catch (error) {
-    console.error('Detailed error in LinkedIn scraping:', error);
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('LinkedIn scraping error:', error);
+    return [];
+  }
+}
+
+async function scrapeNaukriJobs(city: string, scrapingAntKey: string): Promise<Job[]> {
+  console.log(`Starting Naukri scraping for ${city}`);
+  try {
+    const searchUrl = `https://www.naukri.com/software-developer-jobs-in-${city.toLowerCase()}`;
+    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}`;
+
+    const response = await fetch(scrapingUrl, {
+      headers: { 'x-api-key': scrapingAntKey }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Naukri scraping failed: ${response.status}`);
+    }
+
+    const html = await response.text();
+    console.log('Naukri HTML length:', html.length);
+
+    // For now returning a test job
+    return [{
+      title: "Software Developer",
+      company: "Test Naukri Company",
+      location: city,
+      description: "Test Naukri job description",
+      apply_url: "https://naukri.com/jobs/test",
+      source: "naukri",
+      external_job_id: `naukri_${Date.now()}`
+    }];
+  } catch (error) {
+    console.error('Naukri scraping error:', error);
+    return [];
+  }
+}
+
+async function scrapeIndeedJobs(city: string, scrapingAntKey: string): Promise<Job[]> {
+  console.log(`Starting Indeed scraping for ${city}`);
+  try {
+    const searchUrl = `https://www.indeed.co.in/jobs?q=software+developer&l=${encodeURIComponent(city)}`;
+    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}`;
+
+    const response = await fetch(scrapingUrl, {
+      headers: { 'x-api-key': scrapingAntKey }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Indeed scraping failed: ${response.status}`);
+    }
+
+    const html = await response.text();
+    console.log('Indeed HTML length:', html.length);
+
+    // For now returning a test job
+    return [{
+      title: "Software Developer",
+      company: "Test Indeed Company",
+      location: city,
+      description: "Test Indeed job description",
+      apply_url: "https://indeed.com/jobs/test",
+      source: "indeed",
+      external_job_id: `indeed_${Date.now()}`
+    }];
+  } catch (error) {
+    console.error('Indeed scraping error:', error);
     return [];
   }
 }
@@ -89,28 +136,33 @@ serve(async (req) => {
     const scrapingAntKey = Deno.env.get('SCRAPINGANT_API_KEY');
     
     if (!supabaseUrl || !supabaseKey || !scrapingAntKey) {
-      console.error('Missing environment variables:',
-        !supabaseUrl ? 'SUPABASE_URL' : '',
-        !supabaseKey ? 'SUPABASE_SERVICE_ROLE_KEY' : '',
-        !scrapingAntKey ? 'SCRAPINGANT_API_KEY' : ''
-      );
       throw new Error('Missing required environment variables');
     }
     
     console.log('Environment variables loaded successfully');
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Test LinkedIn scraping first
-    console.log('Initiating LinkedIn scraping test...');
-    const linkedInJobs = await scrapeLinkedInJobs('Mumbai', scrapingAntKey);
-    console.log(`LinkedIn scraping results:`, linkedInJobs);
+    let allJobs: Job[] = [];
 
-    if (linkedInJobs.length === 0) {
-      console.log('No LinkedIn jobs found');
+    // Scrape jobs from all sources for each city
+    for (const city of TARGET_CITIES) {
+      console.log(`Processing city: ${city}`);
+      const [linkedInJobs, naukriJobs, indeedJobs] = await Promise.all([
+        scrapeLinkedInJobs(city, scrapingAntKey),
+        scrapeNaukriJobs(city, scrapingAntKey),
+        scrapeIndeedJobs(city, scrapingAntKey)
+      ]);
+
+      allJobs = [...allJobs, ...linkedInJobs, ...naukriJobs, ...indeedJobs];
+    }
+
+    console.log(`Total jobs scraped: ${allJobs.length}`);
+
+    if (allJobs.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: 'LinkedIn scraping test failed - no jobs found'
+          message: 'No jobs found from any source'
         }),
         { 
           status: 404,
@@ -119,10 +171,10 @@ serve(async (req) => {
       );
     }
 
-    console.log('Preparing to insert jobs into database');
+    // Insert all jobs into database with current timestamp
     const { data, error } = await supabase
       .from('jobs')
-      .insert(linkedInJobs.map(job => ({
+      .insert(allJobs.map(job => ({
         ...job,
         posted_date: new Date().toISOString(),
         last_scraped_at: new Date().toISOString()
@@ -134,14 +186,14 @@ serve(async (req) => {
       throw error;
     }
 
-    console.log(`Successfully inserted jobs:`, data);
-
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Successfully scraped and processed ${data?.length} LinkedIn jobs`,
+        message: `Successfully scraped and processed ${allJobs.length} jobs`,
         jobCounts: {
-          linkedin: data?.length || 0
+          linkedin: allJobs.filter(j => j.source === 'linkedin').length,
+          naukri: allJobs.filter(j => j.source === 'naukri').length,
+          indeed: allJobs.filter(j => j.source === 'indeed').length
         }
       }),
       { 
