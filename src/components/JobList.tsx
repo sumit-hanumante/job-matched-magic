@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface JobListProps {
   jobs?: Job[];
@@ -19,6 +20,7 @@ interface SourceCount {
 }
 
 const INITIAL_JOB_LIMIT = 20;
+const JOB_TYPES = ["software developer", "medical coding"];
 
 const JobList = ({ jobs: propJobs }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -26,6 +28,8 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const [isScrapingJobs, setIsScrapingJobs] = useState(false);
   const [uniqueSources, setUniqueSources] = useState<SourceCount[]>([]);
   const [scrapingError, setScrapingError] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<string>("all");
+  const [selectedJobType, setSelectedJobType] = useState<string>("software developer");
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -47,8 +51,10 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
       setIsScrapingJobs(true);
       setScrapingError(null);
       
-      console.log('Starting job scraping...');
-      const response = await supabase.functions.invoke('scrape-jobs');
+      console.log('Starting job scraping for:', selectedJobType);
+      const response = await supabase.functions.invoke('scrape-jobs', {
+        body: { jobType: selectedJobType }
+      });
       
       if (response.error) {
         console.error('Scraping error:', response.error);
@@ -66,7 +72,6 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         description: response.data?.message || "New jobs have been fetched successfully",
       });
       
-      // Refresh the jobs list
       await fetchJobs();
     } catch (error) {
       console.error('Error scraping jobs:', error);
@@ -85,16 +90,21 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const fetchJobs = async () => {
     console.log('Fetching jobs...');
     try {
-      // First, fetch the jobs to get the total count per source
-      const { data: jobsData, error: jobsError } = await supabase
+      let query = supabase
         .from('jobs')
-        .select('*')
-        .in('source', ['remoteok', 'arbeitnow', 'adzuna']);
+        .select('*');
+      
+      if (selectedSource !== 'all') {
+        query = query.eq('source', selectedSource);
+      } else {
+        query = query.in('source', ['remoteok', 'arbeitnow', 'adzuna']);
+      }
+
+      const { data: jobsData, error: jobsError } = await query;
 
       if (jobsError) throw jobsError;
 
       if (jobsData) {
-        // Count jobs by source
         const sourceCounts = jobsData.reduce<Record<string, number>>((acc, job) => {
           acc[job.source] = (acc[job.source] || 0) + 1;
           return acc;
@@ -110,12 +120,19 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
       }
 
       // Get the latest jobs for display
-      const { data: latestJobs, error: latestJobsError } = await supabase
+      let latestJobsQuery = supabase
         .from('jobs')
         .select('*')
-        .in('source', ['remoteok', 'arbeitnow', 'adzuna'])
         .order('posted_date', { ascending: false })
         .limit(INITIAL_JOB_LIMIT);
+
+      if (selectedSource !== 'all') {
+        latestJobsQuery = latestJobsQuery.eq('source', selectedSource);
+      } else {
+        latestJobsQuery = latestJobsQuery.in('source', ['remoteok', 'arbeitnow', 'adzuna']);
+      }
+
+      const { data: latestJobs, error: latestJobsError } = await latestJobsQuery;
 
       if (latestJobsError) throw latestJobsError;
 
@@ -150,7 +167,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
     }
 
     fetchJobs();
-  }, [propJobs]);
+  }, [propJobs, selectedSource]);
 
   if (isLoading) {
     return (
@@ -176,17 +193,38 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">
-              {jobs.length} jobs found from legal sources, last updated {" "}
+              {jobs.length} jobs found from {selectedSource === 'all' ? 'all' : selectedSource}, last updated {" "}
               {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
             </p>
             <p className="text-xs text-muted-foreground">
               Sources: {activeSources.map(s => `${s.source} (${s.count})`).join(', ') || 'None'}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Select value={selectedSource} onValueChange={setSelectedSource}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                {legalSources.map(source => (
+                  <SelectItem key={source} value={source}>{source}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedJobType} onValueChange={setSelectedJobType}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select job type" />
+              </SelectTrigger>
+              <SelectContent>
+                {JOB_TYPES.map(type => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button 
               onClick={() => fetchJobs()}
               variant="outline"

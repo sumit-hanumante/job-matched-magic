@@ -21,8 +21,7 @@ interface Job {
   posted_date: string;
 }
 
-// Approach 1: Using URL parameters
-async function fetchAdzunaJobsApproach1(): Promise<{ jobs: Job[]; error?: string }> {
+async function fetchAdzunaJobsApproach1(jobType: string): Promise<{ jobs: Job[]; error?: string }> {
   try {
     const appId = Deno.env.get('ADZUNA_APP_ID');
     const appKey = Deno.env.get('ADZUNA_APP_KEY');
@@ -37,8 +36,8 @@ async function fetchAdzunaJobsApproach1(): Promise<{ jobs: Job[]; error?: string
     const url = new URL('https://api.adzuna.com/v1/api/jobs/in/search/1');
     url.searchParams.append('app_id', appId);
     url.searchParams.append('app_key', appKey);
-    url.searchParams.append('results_per_page', '20');
-    url.searchParams.append('what', 'software developer');
+    url.searchParams.append('results_per_page', '100');
+    url.searchParams.append('what', jobType);
     url.searchParams.append('content-type', 'application/json');
 
     console.log('Approach 1 - Full URL:', url.toString());
@@ -75,8 +74,7 @@ async function fetchAdzunaJobsApproach1(): Promise<{ jobs: Job[]; error?: string
   }
 }
 
-// Approach 2: Using direct API endpoint
-async function fetchAdzunaJobsApproach2(): Promise<{ jobs: Job[]; error?: string }> {
+async function fetchAdzunaJobsApproach2(jobType: string): Promise<{ jobs: Job[]; error?: string }> {
   try {
     const appId = Deno.env.get('ADZUNA_APP_ID');
     const appKey = Deno.env.get('ADZUNA_APP_KEY');
@@ -86,7 +84,7 @@ async function fetchAdzunaJobsApproach2(): Promise<{ jobs: Job[]; error?: string
     }
 
     const baseUrl = 'https://api.adzuna.com/v1/api/jobs/in/search/1';
-    const url = `${baseUrl}?app_id=${appId}&app_key=${appKey}&results_per_page=20&what=software%20engineer&content-type=application/json`;
+    const url = `${baseUrl}?app_id=${appId}&app_key=${appKey}&results_per_page=20&what=${jobType}&content-type=application/json`;
     
     console.log('Approach 2 - Fetching jobs...');
     
@@ -120,8 +118,7 @@ async function fetchAdzunaJobsApproach2(): Promise<{ jobs: Job[]; error?: string
   }
 }
 
-// Approach 3: Using additional parameters
-async function fetchAdzunaJobsApproach3(): Promise<{ jobs: Job[]; error?: string }> {
+async function fetchAdzunaJobsApproach3(jobType: string): Promise<{ jobs: Job[]; error?: string }> {
   try {
     const appId = Deno.env.get('ADZUNA_APP_ID');
     const appKey = Deno.env.get('ADZUNA_APP_KEY');
@@ -135,7 +132,7 @@ async function fetchAdzunaJobsApproach3(): Promise<{ jobs: Job[]; error?: string
       app_id: appId,
       app_key: appKey,
       results_per_page: '20',
-      what: 'software engineer',
+      what: jobType,
       where: 'india',
       content_type: 'application/json',
       category: 'it-jobs'
@@ -185,6 +182,9 @@ serve(async (req) => {
   try {
     console.log('Starting job fetching process with detailed logging...');
     
+    const { jobType = "software developer" } = await req.json();
+    console.log('Fetching jobs for type:', jobType);
+    
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -194,12 +194,12 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Try all approaches in parallel and collect results
-    console.log('Attempting all approaches in parallel...');
+    // Try all approaches in parallel
+    console.log('Attempting all approaches for job type:', jobType);
     const [approach1Result, approach2Result, approach3Result] = await Promise.all([
-      fetchAdzunaJobsApproach1().catch(error => ({ jobs: [], error: error.message })),
-      fetchAdzunaJobsApproach2().catch(error => ({ jobs: [], error: error.message })),
-      fetchAdzunaJobsApproach3().catch(error => ({ jobs: [], error: error.message }))
+      fetchAdzunaJobsApproach1(jobType).catch(error => ({ jobs: [], error: error.message })),
+      fetchAdzunaJobsApproach2(jobType).catch(error => ({ jobs: [], error: error.message })),
+      fetchAdzunaJobsApproach3(jobType).catch(error => ({ jobs: [], error: error.message }))
     ]);
 
     console.log('Results from approaches:', {
