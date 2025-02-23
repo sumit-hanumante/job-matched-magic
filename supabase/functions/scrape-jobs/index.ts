@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38-alpha/deno-dom-wasm.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +27,9 @@ interface Job {
 async function scrapeLinkedInJobs(city: string, scrapingAntKey: string): Promise<Job[]> {
   console.log(`Scraping LinkedIn jobs for ${city}...`);
   try {
-    const searchUrl = `https://linkedin.com/jobs/search?keywords=software&location=${encodeURIComponent(city)}`;
+    const searchUrl = `https://www.linkedin.com/jobs/search?keywords=software%20developer&location=${encodeURIComponent(city)}%2C%20India&position=1&pageNum=0`;
+    console.log(`Fetching LinkedIn URL: ${searchUrl}`);
+    
     const response = await fetch(
       `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}`,
       {
@@ -39,15 +42,61 @@ async function scrapeLinkedInJobs(city: string, scrapingAntKey: string): Promise
     }
 
     const html = await response.text();
-    // Extract job listings from HTML (simplified for example)
-    // In practice, you'd want to parse the HTML and extract structured data
+    console.log('Received HTML response length:', html.length);
+
+    const dom = new DOMParser().parseFromString(html, 'text/html');
+    if (!dom) {
+      throw new Error('Failed to parse HTML');
+    }
+
+    const jobCards = dom.querySelectorAll('.job-search-card');
+    console.log(`Found ${jobCards.length} job cards for ${city}`);
+
     const jobs: Job[] = [];
     
-    // Log the successful scraping
-    console.log(`Successfully scraped LinkedIn jobs for ${city}`);
+    jobCards.forEach((card) => {
+      try {
+        const titleElement = card.querySelector('.job-search-card__title');
+        const companyElement = card.querySelector('.job-search-card__company-name');
+        const locationElement = card.querySelector('.job-search-card__location');
+        const linkElement = card.querySelector('a.job-search-card__link');
+        
+        if (!titleElement || !companyElement || !locationElement || !linkElement) {
+          console.log('Skipping incomplete job card');
+          return;
+        }
+
+        const jobId = linkElement.getAttribute('data-entity-urn')?.split(':').pop() || Date.now().toString();
+        const applyUrl = linkElement.getAttribute('href') || '';
+        
+        const job: Job = {
+          title: titleElement.textContent?.trim() || 'Untitled Position',
+          company: companyElement.textContent?.trim() || 'Unknown Company',
+          location: `${locationElement.textContent?.trim()}, ${city}`,
+          description: '', // We'll fetch full description later if needed
+          apply_url: applyUrl,
+          source: 'linkedin',
+          external_job_id: `li_${jobId}`,
+          requirements: []
+        };
+
+        // Try to extract salary information if present
+        const salaryElement = card.querySelector('.job-search-card__salary-info');
+        if (salaryElement) {
+          job.salary_range = salaryElement.textContent?.trim();
+        }
+
+        jobs.push(job);
+      } catch (error) {
+        console.error('Error processing job card:', error);
+      }
+    });
+
+    console.log(`Successfully extracted ${jobs.length} LinkedIn jobs for ${city}`);
     return jobs;
   } catch (error) {
     console.error(`Error scraping LinkedIn jobs for ${city}:`, error);
+    console.error('Error details:', error instanceof Error ? error.stack : '');
     return [];
   }
 }
@@ -216,28 +265,16 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Scrape jobs from multiple sources and cities
-    const jobPromises = [
-      // Scrape RemoteOK jobs
-      scrapeRemoteOkJobs(),
-      
-      // Scrape jobs for each target city
-      ...TARGET_CITIES.flatMap(city => [
-        scrapeLinkedInJobs(city, scrapingAntKey),
-        scrapeIndeedJobs(city, apiDevKey)
-      ])
-    ];
-    
-    const jobResults = await Promise.all(jobPromises);
-    const allJobs = jobResults.flat();
-    
-    console.log(`Found ${allJobs.length} total jobs from all sources`);
+    // Let's test LinkedIn scraping first
+    console.log('Testing LinkedIn scraping...');
+    const linkedInJobs = await scrapeLinkedInJobs('Mumbai', scrapingAntKey);
+    console.log(`LinkedIn scraping test results: ${linkedInJobs.length} jobs found`);
 
-    if (allJobs.length === 0) {
+    if (linkedInJobs.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          message: 'No jobs found from any source'
+          message: 'LinkedIn scraping test failed - no jobs found'
         }),
         { 
           status: 404,
@@ -246,63 +283,29 @@ serve(async (req) => {
       );
     }
 
-    // Delete old jobs first
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const { error: deleteError } = await supabase
+    // If we got jobs, let's save them
+    const { data, error } = await supabase
       .from('jobs')
-      .delete()
-      .lt('posted_date', thirtyDaysAgo.toISOString());
+      .insert(linkedInJobs.map(job => ({
+        ...job,
+        posted_date: new Date().toISOString(),
+        last_scraped_at: new Date().toISOString()
+      })))
+      .select();
 
-    if (deleteError) {
-      console.error('Error deleting old jobs:', deleteError);
-      throw deleteError;
+    if (error) {
+      console.error('Error inserting LinkedIn jobs:', error);
+      throw error;
     }
 
-    // Process jobs in smaller batches
-    const batchSize = 10;
-    const batches = [];
-    for (let i = 0; i < allJobs.length; i += batchSize) {
-      batches.push(allJobs.slice(i, i + batchSize));
-    }
-
-    let totalProcessed = 0;
-    console.log(`Processing ${batches.length} batches of jobs...`);
-
-    for (const batch of batches) {
-      try {
-        const { data, error } = await supabase
-          .from('jobs')
-          .insert(batch.map(job => ({
-            ...job,
-            posted_date: new Date().toISOString(),
-            last_scraped_at: new Date().toISOString()
-          })))
-          .select();
-
-        if (error) {
-          console.error('Error inserting jobs batch:', error);
-          continue;
-        }
-
-        if (data) {
-          totalProcessed += data.length;
-          console.log(`Successfully inserted ${data.length} jobs in batch. Total: ${totalProcessed}`);
-        }
-      } catch (error) {
-        console.error('Error processing batch:', error);
-      }
-    }
-
-    console.log(`Successfully processed ${totalProcessed} jobs`);
+    console.log(`Successfully inserted ${data?.length} LinkedIn jobs`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Successfully scraped and processed ${totalProcessed} jobs`,
+        message: `Successfully scraped and processed ${data?.length} LinkedIn jobs`,
         jobCounts: {
-          total: totalProcessed
+          linkedin: data?.length || 0
         }
       }),
       { 
