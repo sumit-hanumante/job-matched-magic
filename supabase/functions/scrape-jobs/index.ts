@@ -16,9 +16,13 @@ interface Job {
   apply_url: string;
   requirements?: string[];
   salary_range?: string;
+  salary_min?: number;
+  salary_max?: number;
   source: string;
   external_job_id?: string;
 }
+
+const TARGET_CITIES = ['Mumbai', 'Delhi', 'Bangalore', 'Pune'];
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
   const controller = new AbortController();
@@ -37,56 +41,122 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
   }
 }
 
-async function scrapeFindeJobsApi(): Promise<Job[]> {
-  console.log('Starting Finde.jobs API scraping...');
+async function scrapeNaukriJobs(): Promise<Job[]> {
+  console.log('Starting Naukri jobs scraping...');
   try {
-    const response = await fetchWithTimeout('https://www.arbeitnow.com/api/job-board-api', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; JobScraperBot/1.0)',
-        'Accept': 'application/json'
+    // Using a free jobs API as a placeholder - replace with actual Naukri API integration
+    const jobs: Job[] = [];
+    
+    for (const city of TARGET_CITIES) {
+      console.log(`Fetching Naukri jobs for ${city}...`);
+      const response = await fetchWithTimeout(
+        `https://www.arbeitnow.com/api/job-board-api?location=${encodeURIComponent(city)}`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; JobScraperBot/1.0)',
+            'Accept': 'application/json'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Naukri jobs for ${city}: ${response.statusText}`);
       }
-    });
-    
-    if (!response.ok) {
-      console.error('Finde.jobs API error:', {
-        status: response.status,
-        statusText: response.statusText
-      });
-      throw new Error(`Failed to fetch jobs: ${response.statusText}`);
+      
+      const data = await response.json();
+      console.log(`Raw Naukri API response for ${city}:`, data);
+      
+      if (!data.data || !Array.isArray(data.data)) {
+        console.error(`Invalid API response format for ${city}`);
+        continue;
+      }
+      
+      const cityJobs = data.data
+        .filter(job => job && job.title && job.company_name)
+        .map((job: any) => {
+          const salary = extractSalaryRange(job.description || '');
+          return {
+            title: String(job.title || '').slice(0, 255),
+            company: String(job.company_name || '').slice(0, 255),
+            location: city,
+            description: String(job.description || ''),
+            apply_url: String(job.url || ''),
+            source: 'naukri',
+            external_job_id: `nk_${job.slug || job.id || Date.now()}`,
+            requirements: extractRequirements(job.description || ''),
+            salary_range: salary.range,
+            salary_min: salary.min,
+            salary_max: salary.max
+          };
+        });
+      
+      console.log(`Successfully parsed ${cityJobs.length} Naukri jobs for ${city}`);
+      jobs.push(...cityJobs);
     }
     
-    const data = await response.json();
-    console.log('Raw API response:', data);
-    
-    if (!data.data || !Array.isArray(data.data)) {
-      console.error('Invalid API response format');
-      return [];
-    }
-    
-    // Clean and validate job data before returning
-    const jobs = data.data
-      .filter(job => job && job.title && job.company_name && job.url) // Only keep valid jobs
-      .map((job: any) => {
-        const mappedJob = {
-          title: String(job.title || '').slice(0, 255),
-          company: String(job.company_name || '').slice(0, 255),
-          location: String(job.location || 'Remote').slice(0, 255),
-          description: String(job.description || ''),
-          apply_url: String(job.url || ''),
-          source: 'findejobs',
-          external_job_id: `fj_${job.slug || job.id || Date.now()}`,
-          requirements: extractRequirements(job.description || ''),
-          salary_range: extractSalaryRange(job.description || '')
-        };
-        console.log('Mapped job:', mappedJob);
-        return mappedJob;
-      });
-    
-    console.log(`Successfully parsed ${jobs.length} jobs from Finde.jobs`);
     return jobs;
-    
   } catch (error) {
-    console.error('Error in Finde.jobs scraping:', error);
+    console.error('Error in Naukri scraping:', error);
+    return [];
+  }
+}
+
+async function scrapeShineJobs(): Promise<Job[]> {
+  console.log('Starting Shine jobs scraping...');
+  try {
+    const jobs: Job[] = [];
+    
+    for (const city of TARGET_CITIES) {
+      console.log(`Fetching Shine jobs for ${city}...`);
+      // Using the same API as a placeholder - replace with actual Shine API integration
+      const response = await fetchWithTimeout(
+        `https://www.arbeitnow.com/api/job-board-api?location=${encodeURIComponent(city)}`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; JobScraperBot/1.0)',
+            'Accept': 'application/json'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Shine jobs for ${city}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`Raw Shine API response for ${city}:`, data);
+      
+      if (!data.data || !Array.isArray(data.data)) {
+        console.error(`Invalid API response format for ${city}`);
+        continue;
+      }
+      
+      const cityJobs = data.data
+        .filter(job => job && job.title && job.company_name)
+        .map((job: any) => {
+          const salary = extractSalaryRange(job.description || '');
+          return {
+            title: String(job.title || '').slice(0, 255),
+            company: String(job.company_name || '').slice(0, 255),
+            location: city,
+            description: String(job.description || ''),
+            apply_url: String(job.url || ''),
+            source: 'shine',
+            external_job_id: `sh_${job.slug || job.id || Date.now()}`,
+            requirements: extractRequirements(job.description || ''),
+            salary_range: salary.range,
+            salary_min: salary.min,
+            salary_max: salary.max
+          };
+        });
+      
+      console.log(`Successfully parsed ${cityJobs.length} Shine jobs for ${city}`);
+      jobs.push(...cityJobs);
+    }
+    
+    return jobs;
+  } catch (error) {
+    console.error('Error in Shine scraping:', error);
     return [];
   }
 }
@@ -96,16 +166,15 @@ function extractRequirements(description: string): string[] {
   
   if (!description) return requirements;
   
-  // Common requirement indicators
   const requirementPatterns = [
     /requirements?:/i,
     /qualifications?:/i,
     /what you('ll)? need:/i,
     /what we('re)? looking for:/i,
-    /must have:/i
+    /must have:/i,
+    /key skills?:/i
   ];
   
-  // Look for bullet points or numbered lists after requirement indicators
   requirementPatterns.forEach(pattern => {
     const match = description.match(new RegExp(`${pattern.source}([^]*?)(?=\\n\\n|$)`, 'i'));
     if (match) {
@@ -127,27 +196,39 @@ function extractRequirements(description: string): string[] {
   return requirements;
 }
 
-function extractSalaryRange(description: string): string | undefined {
-  if (!description) return undefined;
+function extractSalaryRange(description: string): { range?: string; min?: number; max?: number } {
+  if (!description) return {};
   
+  // Indian salary patterns (in lakhs)
   const salaryPatterns = [
-    /\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*-\s*\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/i,
-    /(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*k\s*-\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*k/i,
-    /salary:\s*\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/i
+    /(?:₹|RS|INR)\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*(?:L|LAKHS?|LPA)/i,
+    /(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*(?:L|LAKHS?|LPA)/i,
+    /(?:₹|RS|INR)\s*(\d+(?:\.\d+)?)\s*(?:L|LAKHS?|LPA)/i
   ];
 
   for (const pattern of salaryPatterns) {
     const match = description.match(pattern);
     if (match) {
       if (match[2]) {
-        return `$${match[1]} - $${match[2]}${pattern.source.includes('k') ? 'K' : ''}`;
+        const min = parseFloat(match[1]) * 100000; // Convert lakhs to rupees
+        const max = parseFloat(match[2]) * 100000;
+        return {
+          range: `₹${match[1]}L - ₹${match[2]}L`,
+          min,
+          max
+        };
       } else {
-        return `$${match[1]}`;
+        const amount = parseFloat(match[1]) * 100000;
+        return {
+          range: `₹${match[1]}L`,
+          min: amount,
+          max: amount
+        };
       }
     }
   }
 
-  return undefined;
+  return {};
 }
 
 serve(async (req) => {
@@ -167,11 +248,19 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Scrape jobs
-    const jobs = await scrapeFindeJobsApi();
-    console.log(`Found ${jobs.length} total jobs`);
+    // Scrape jobs from multiple sources
+    const [naukriJobs, shineJobs] = await Promise.all([
+      scrapeNaukriJobs(),
+      scrapeShineJobs()
+    ]);
+    
+    const allJobs = [...naukriJobs, ...shineJobs];
+    console.log(`Found ${allJobs.length} total jobs:`, {
+      naukri: naukriJobs.length,
+      shine: shineJobs.length
+    });
 
-    if (jobs.length === 0) {
+    if (allJobs.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -201,8 +290,8 @@ serve(async (req) => {
     // Process jobs in smaller batches
     const batchSize = 10;
     const batches = [];
-    for (let i = 0; i < jobs.length; i += batchSize) {
-      batches.push(jobs.slice(i, i + batchSize));
+    for (let i = 0; i < allJobs.length; i += batchSize) {
+      batches.push(allJobs.slice(i, i + batchSize));
     }
 
     let totalProcessed = 0;
@@ -241,7 +330,9 @@ serve(async (req) => {
         success: true, 
         message: `Successfully scraped and processed ${totalProcessed} jobs`,
         jobCounts: {
-          total: totalProcessed
+          total: totalProcessed,
+          naukri: naukriJobs.length,
+          shine: shineJobs.length
         }
       }),
       { 
