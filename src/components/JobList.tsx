@@ -79,11 +79,11 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         console.log('Unique job sources in database:', sources);
       }
 
-      // For testing: Only fetch LinkedIn jobs
+      // Fetch all jobs from legal sources
       const { data: jobsData, error: jobsError } = await supabase
         .from('jobs')
         .select('*')
-        .eq('source', 'linkedin') // Filter for LinkedIn jobs only
+        .in('source', ['remoteok', 'greenhouse', 'wellfound']) // Only fetch from legal sources
         .order('posted_date', { ascending: false })
         .limit(INITIAL_JOB_LIMIT);
 
@@ -142,16 +142,19 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
     );
   }
 
+  const legalSources = ['remoteok', 'greenhouse', 'wellfound'];
+  const activeSources = uniqueSources.filter(source => legalSources.includes(source));
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="space-y-1">
           <p className="text-sm text-muted-foreground">
-            {jobs.length} LinkedIn jobs found, last updated {" "}
+            {jobs.length} jobs found from legal sources, last updated {" "}
             {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
           </p>
           <p className="text-xs text-muted-foreground">
-            Available sources in database: {uniqueSources.join(', ')}
+            Active sources: {activeSources.join(', ') || 'None'}
           </p>
         </div>
         <div className="flex gap-2">
