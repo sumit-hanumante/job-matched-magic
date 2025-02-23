@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -29,8 +28,11 @@ async function fetchAdzunaJobsApproach1(): Promise<{ jobs: Job[]; error?: string
     const appKey = Deno.env.get('ADZUNA_APP_KEY');
     
     if (!appId || !appKey) {
+      console.error('Approach 1 - Missing credentials');
       return { jobs: [], error: 'Adzuna credentials missing' };
     }
+
+    console.log('Approach 1 - Using credentials:', { appId: appId.slice(0,4) + '...', appKey: appKey.slice(0,4) + '...' });
 
     const url = new URL('https://api.adzuna.com/v1/api/jobs/in/search/1');
     url.searchParams.append('app_id', appId);
@@ -39,17 +41,18 @@ async function fetchAdzunaJobsApproach1(): Promise<{ jobs: Job[]; error?: string
     url.searchParams.append('what', 'software developer');
     url.searchParams.append('content-type', 'application/json');
 
-    console.log('Approach 1 - Fetching from:', url.toString());
+    console.log('Approach 1 - Full URL:', url.toString());
     
     const response = await fetch(url.toString());
+    const responseText = await response.text();
     
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Adzuna API error: ${response.status} - ${errorText}`);
+      console.error('Approach 1 - Error response:', responseText);
+      throw new Error(`Adzuna API error: ${response.status} - ${responseText}`);
     }
 
-    const data = await response.json();
-    console.log('Approach 1 - Results:', data.results?.length || 0);
+    const data = JSON.parse(responseText);
+    console.log('Approach 1 - Successful response with', data.results?.length || 0, 'jobs');
 
     return {
       jobs: (data.results || []).map((job: any) => ({
@@ -67,7 +70,7 @@ async function fetchAdzunaJobsApproach1(): Promise<{ jobs: Job[]; error?: string
       }))
     };
   } catch (error) {
-    console.error('Approach 1 error:', error);
+    console.error('Approach 1 detailed error:', error);
     return { jobs: [], error: error.message };
   }
 }
@@ -180,7 +183,119 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting job fetching process with multiple approaches...');
+    console.log('Starting job fetching process with detailed logging...');
+    console.log('Checking environment variables...');
+    
+    const appId = Deno.env.get('ADZUNA_APP_ID');
+    const appKey = Deno.env.get('ADZUNA_APP_KEY');
+    
+    if (!appId || !appKey) {
+      console.error('Missing Adzuna credentials');
+      throw new Error('Adzuna credentials are not configured');
+    }
+    
+    console.log('Environment variables present:', { 
+      hasAppId: !!appId, 
+      hasAppKey: !!appKey,
+      appIdLength: appId.length,
+      appKeyLength: appKey.length
+    });
+
+    // Try approach 1 first with detailed logging
+    console.log('Attempting Approach 1...');
+    const approach1Result = await fetchAdzunaJobsApproach1();
+    console.log('Approach 1 completed with', approach1Result.jobs.length, 'jobs');
+    
+    if (approach1Result.error) {
+      console.log('Attempting Approach 2...');
+      const approach2Result = await fetchAdzunaJobsApproach2();
+      console.log('Approach 2 completed with', approach2Result.jobs.length, 'jobs');
+      
+      if (approach2Result.error) {
+        console.log('Attempting Approach 3...');
+        const approach3Result = await fetchAdzunaJobsApproach3();
+        console.log('Approach 3 completed with', approach3Result.jobs.length, 'jobs');
+        
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        
+        if (!supabaseUrl || !supabaseKey) {
+          throw new Error('Missing Supabase credentials');
+        }
+        
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        // Combine successful results
+        const allJobs = [
+          ...approach1Result.jobs,
+          ...approach2Result.jobs,
+          ...approach3Result.jobs
+        ];
+
+        console.log(`Total jobs fetched: ${allJobs.length}`);
+
+        if (allJobs.length === 0) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              message: 'No jobs found from any approach',
+              errors: {
+                approach1: approach1Result.error,
+                approach2: approach2Result.error,
+                approach3: approach3Result.error
+              }
+            }),
+            {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        }
+
+        // Insert jobs with upsert
+        const { error: upsertError } = await supabase
+          .from('jobs')
+          .upsert(
+            allJobs.map(job => ({
+              ...job,
+              last_scraped_at: new Date().toISOString()
+            })),
+            {
+              onConflict: 'external_job_id,source',
+              ignoreDuplicates: true
+            }
+          );
+
+        if (upsertError) {
+          throw upsertError;
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Successfully processed ${allJobs.length} jobs`,
+            stats: {
+              approach1: {
+                jobs: approach1Result.jobs.length,
+                error: approach1Result.error
+              },
+              approach2: {
+                jobs: approach2Result.jobs.length,
+                error: approach2Result.error
+              },
+              approach3: {
+                jobs: approach3Result.jobs.length,
+                error: approach3Result.error
+              }
+            }
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -190,19 +305,6 @@ serve(async (req) => {
     }
     
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Try all three approaches
-    const [approach1Result, approach2Result, approach3Result] = await Promise.all([
-      fetchAdzunaJobsApproach1(),
-      fetchAdzunaJobsApproach2(),
-      fetchAdzunaJobsApproach3()
-    ]);
-
-    console.log('Results from approaches:', {
-      approach1: approach1Result.jobs.length,
-      approach2: approach2Result.jobs.length,
-      approach3: approach3Result.jobs.length
-    });
 
     // Combine successful results
     const allJobs = [
@@ -275,10 +377,16 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Fatal error in job fetching:', error);
+    console.error('Fatal error with full details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error occurred',
+        details: error instanceof Error ? error.stack : undefined,
         timestamp: new Date().toISOString()
       }),
       {
