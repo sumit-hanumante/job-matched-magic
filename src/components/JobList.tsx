@@ -67,19 +67,29 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const fetchJobs = async () => {
     console.log('Fetching jobs...');
     try {
-      // Get count of jobs by source
+      // Get count of jobs by source using a raw count query
       const { data: sourceCounts, error: sourceError } = await supabase
         .from('jobs')
-        .select('source, count(*)', { count: 'exact' })
-        .group('source');
+        .select('source, count', {
+          count: 'exact',
+          head: false
+        })
+        .throwOnError();
 
       if (sourceError) throw sourceError;
 
       if (sourceCounts) {
-        const sources = sourceCounts.map(item => ({
-          source: item.source,
-          count: parseInt(item.count as string)
+        // Transform the data into the required format
+        const sources = Object.entries(
+          sourceCounts.reduce((acc: Record<string, number>, curr: any) => {
+            acc[curr.source] = (acc[curr.source] || 0) + 1;
+            return acc;
+          }, {})
+        ).map(([source, count]) => ({
+          source,
+          count: count as number
         }));
+        
         setUniqueSources(sources);
         console.log('Job counts by source:', sources);
       }
