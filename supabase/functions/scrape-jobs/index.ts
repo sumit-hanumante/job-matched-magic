@@ -63,17 +63,20 @@ async function scrapeFindeJobsApi(): Promise<Job[]> {
       return [];
     }
     
-    const jobs = data.data.map((job: any) => ({
-      title: job.title || 'Unknown Position',
-      company: job.company_name || 'Unknown Company',
-      location: job.location || 'Remote',
-      description: job.description || '',
-      apply_url: job.url || '',
-      source: 'findejobs',
-      external_job_id: `fj_${job.slug}`,
-      requirements: extractRequirements(job.description || ''),
-      salary_range: extractSalaryRange(job.description || '')
-    }));
+    // Clean and validate job data before returning
+    const jobs = data.data
+      .filter(job => job && job.title && job.company_name && job.url) // Only keep valid jobs
+      .map((job: any) => ({
+        title: String(job.title).slice(0, 255), // Ensure string and limit length
+        company: String(job.company_name).slice(0, 255),
+        location: String(job.location || 'Remote').slice(0, 255),
+        description: String(job.description || ''),
+        apply_url: String(job.url),
+        source: 'findejobs',
+        external_job_id: `fj_${job.slug}`,
+        requirements: extractRequirements(job.description || ''),
+        salary_range: extractSalaryRange(job.description || '')
+      }));
     
     console.log(`Successfully parsed ${jobs.length} jobs from Finde.jobs`);
     return jobs;
@@ -160,7 +163,7 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Scrape jobs from alternative API
+    // Scrape jobs
     const jobs = await scrapeFindeJobsApi();
     console.log(`Found ${jobs.length} total jobs`);
 
@@ -191,34 +194,46 @@ serve(async (req) => {
       throw deleteError;
     }
 
-    // Insert new jobs
-    const { data: newJobs, error: insertError } = await supabase
-      .from('jobs')
-      .upsert(
-        jobs.map(job => ({
-          ...job,
-          posted_date: new Date().toISOString(),
-          last_scraped_at: new Date().toISOString()
-        })),
-        { 
-          onConflict: 'external_job_id',
-          ignoreDuplicates: true 
-        }
-      );
-
-    if (insertError) {
-      console.error('Error upserting jobs:', insertError);
-      throw insertError;
+    // Process jobs in smaller batches to avoid timeouts
+    const batchSize = 20;
+    const batches = [];
+    for (let i = 0; i < jobs.length; i += batchSize) {
+      batches.push(jobs.slice(i, i + batchSize));
     }
 
-    console.log(`Successfully processed ${newJobs?.length || 0} jobs`);
+    let totalProcessed = 0;
+    console.log(`Processing ${batches.length} batches of jobs...`);
+
+    for (const batch of batches) {
+      const { data: newJobs, error: insertError } = await supabase
+        .from('jobs')
+        .upsert(
+          batch.map(job => ({
+            ...job,
+            posted_date: new Date().toISOString(),
+            last_scraped_at: new Date().toISOString()
+          }))
+        );
+
+      if (insertError) {
+        console.error('Error upserting jobs batch:', insertError);
+        continue;
+      }
+
+      if (newJobs) {
+        totalProcessed += newJobs.length;
+        console.log(`Processed batch of ${newJobs.length} jobs. Total: ${totalProcessed}`);
+      }
+    }
+
+    console.log(`Successfully processed ${totalProcessed} jobs`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Successfully scraped and processed ${jobs.length} jobs`,
+        message: `Successfully scraped and processed ${totalProcessed} jobs`,
         jobCounts: {
-          total: jobs.length
+          total: totalProcessed
         }
       }),
       { 
