@@ -20,11 +20,27 @@ interface Job {
   external_job_id?: string;
 }
 
-async function scrapeRemoteOkJobs(): Promise<Job[]> {
-  console.log('Starting RemoteOK jobs scraping...');
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  
   try {
-    // Use a different API endpoint that's more reliable
-    const response = await fetch('https://remoteok.io/api?api=1', {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
+
+async function scrapeFindeJobsApi(): Promise<Job[]> {
+  console.log('Starting Finde.jobs API scraping...');
+  try {
+    const response = await fetchWithTimeout('https://www.arbeitnow.com/api/job-board-api', {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; JobScraperBot/1.0)',
         'Accept': 'application/json'
@@ -32,49 +48,38 @@ async function scrapeRemoteOkJobs(): Promise<Job[]> {
     });
     
     if (!response.ok) {
-      console.error('RemoteOK API error:', {
+      console.error('Finde.jobs API error:', {
         status: response.status,
         statusText: response.statusText
       });
-      throw new Error(`Failed to fetch RemoteOK jobs: ${response.statusText}`);
+      throw new Error(`Failed to fetch jobs: ${response.statusText}`);
     }
     
-    const text = await response.text();
-    console.log('RemoteOK raw response preview:', text.slice(0, 200));
+    const data = await response.json();
+    console.log('Finde.jobs raw response preview:', JSON.stringify(data).slice(0, 200));
     
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (error) {
-      console.error('Failed to parse RemoteOK response:', error);
+    if (!data.data || !Array.isArray(data.data)) {
+      console.error('Invalid API response format');
       return [];
     }
     
-    if (!Array.isArray(data)) {
-      console.error('RemoteOK response is not an array:', typeof data);
-      return [];
-    }
+    const jobs = data.data.map((job: any) => ({
+      title: job.title || 'Unknown Position',
+      company: job.company_name || 'Unknown Company',
+      location: job.location || 'Remote',
+      description: job.description || '',
+      apply_url: job.url || '',
+      source: 'findejobs',
+      external_job_id: `fj_${job.slug}`,
+      requirements: extractRequirements(job.description || ''),
+      salary_range: extractSalaryRange(job.description || '')
+    }));
     
-    // Filter out any non-job objects and map to our job format
-    const jobs = data
-      .filter(item => item && typeof item === 'object' && 'position' in item)
-      .map((job: any) => ({
-        title: job.position || job.title || 'Unknown Position',
-        company: job.company || 'Unknown Company',
-        location: job.location || 'Remote',
-        description: job.description || '',
-        apply_url: job.url || job.apply_url || '',
-        source: 'remoteok',
-        external_job_id: `rok_${job.id}`,
-        requirements: extractRequirements(job.description || ''),
-        salary_range: job.salary || extractSalaryRange(job.description || '')
-      }));
-    
-    console.log(`Successfully parsed ${jobs.length} RemoteOK jobs`);
+    console.log(`Successfully parsed ${jobs.length} jobs from Finde.jobs`);
     return jobs;
     
   } catch (error) {
-    console.error('Error in RemoteOK scraping:', error);
+    console.error('Error in Finde.jobs scraping:', error);
     return [];
   }
 }
@@ -155,12 +160,11 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Scrape jobs from RemoteOK
-    const remoteOkJobs = await scrapeRemoteOkJobs();
-    console.log(`Found ${remoteOkJobs.length} RemoteOK jobs`);
+    // Scrape jobs from alternative API
+    const jobs = await scrapeFindeJobsApi();
+    console.log(`Found ${jobs.length} total jobs`);
 
-    // Only proceed if we have jobs to process
-    if (remoteOkJobs.length === 0) {
+    if (jobs.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -191,7 +195,7 @@ serve(async (req) => {
     const { data: newJobs, error: insertError } = await supabase
       .from('jobs')
       .upsert(
-        remoteOkJobs.map(job => ({
+        jobs.map(job => ({
           ...job,
           posted_date: new Date().toISOString(),
           last_scraped_at: new Date().toISOString()
@@ -212,10 +216,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Successfully scraped and processed ${remoteOkJobs.length} jobs`,
+        message: `Successfully scraped and processed ${jobs.length} jobs`,
         jobCounts: {
-          remoteok: remoteOkJobs.length,
-          total: remoteOkJobs.length
+          total: jobs.length
         }
       }),
       { 
