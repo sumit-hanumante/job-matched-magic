@@ -67,46 +67,41 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const fetchJobs = async () => {
     console.log('Fetching jobs...');
     try {
-      // Get count of jobs by source using a raw count query
-      const { data: sourceCounts, error: sourceError } = await supabase
+      // First, fetch the jobs to get the total count per source
+      const { data: jobsData, error: jobsError } = await supabase
         .from('jobs')
-        .select('source, count', {
-          count: 'exact',
-          head: false
-        })
-        .throwOnError();
+        .select('*')
+        .in('source', ['remoteok', 'arbeitnow', 'adzuna']);
 
-      if (sourceError) throw sourceError;
+      if (jobsError) throw jobsError;
 
-      if (sourceCounts) {
-        // Transform the data into the required format
-        const sources = Object.entries(
-          sourceCounts.reduce((acc: Record<string, number>, curr: any) => {
-            acc[curr.source] = (acc[curr.source] || 0) + 1;
-            return acc;
-          }, {})
-        ).map(([source, count]) => ({
+      if (jobsData) {
+        // Count jobs by source
+        const sourceCounts = jobsData.reduce((acc: Record<string, number>, job) => {
+          acc[job.source] = (acc[job.source] || 0) + 1;
+          return acc;
+        }, {});
+
+        const sources = Object.entries(sourceCounts).map(([source, count]) => ({
           source,
-          count: count as number
+          count
         }));
         
         setUniqueSources(sources);
         console.log('Job counts by source:', sources);
       }
 
-      // Fetch all jobs from legal sources
-      const { data: jobsData, error: jobsError } = await supabase
+      // Get the latest jobs for display
+      const { data: latestJobs, error: latestJobsError } = await supabase
         .from('jobs')
         .select('*')
         .in('source', ['remoteok', 'arbeitnow', 'adzuna'])
         .order('posted_date', { ascending: false })
         .limit(INITIAL_JOB_LIMIT);
 
-      console.log('Jobs response:', { jobsData, jobsError });
+      if (latestJobsError) throw latestJobsError;
 
-      if (jobsError) throw jobsError;
-
-      const transformedJobs = jobsData?.map(job => ({
+      const transformedJobs = latestJobs?.map(job => ({
         ...job,
         matchScore: 0,
         postedDate: new Date(job.posted_date).toISOString().split('T')[0],
