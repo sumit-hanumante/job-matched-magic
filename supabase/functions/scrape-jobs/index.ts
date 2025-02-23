@@ -184,119 +184,7 @@ serve(async (req) => {
 
   try {
     console.log('Starting job fetching process with detailed logging...');
-    console.log('Checking environment variables...');
     
-    const appId = Deno.env.get('ADZUNA_APP_ID');
-    const appKey = Deno.env.get('ADZUNA_APP_KEY');
-    
-    if (!appId || !appKey) {
-      console.error('Missing Adzuna credentials');
-      throw new Error('Adzuna credentials are not configured');
-    }
-    
-    console.log('Environment variables present:', { 
-      hasAppId: !!appId, 
-      hasAppKey: !!appKey,
-      appIdLength: appId.length,
-      appKeyLength: appKey.length
-    });
-
-    // Try approach 1 first with detailed logging
-    console.log('Attempting Approach 1...');
-    const approach1Result = await fetchAdzunaJobsApproach1();
-    console.log('Approach 1 completed with', approach1Result.jobs.length, 'jobs');
-    
-    if (approach1Result.error) {
-      console.log('Attempting Approach 2...');
-      const approach2Result = await fetchAdzunaJobsApproach2();
-      console.log('Approach 2 completed with', approach2Result.jobs.length, 'jobs');
-      
-      if (approach2Result.error) {
-        console.log('Attempting Approach 3...');
-        const approach3Result = await fetchAdzunaJobsApproach3();
-        console.log('Approach 3 completed with', approach3Result.jobs.length, 'jobs');
-        
-        const supabaseUrl = Deno.env.get('SUPABASE_URL');
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-        
-        if (!supabaseUrl || !supabaseKey) {
-          throw new Error('Missing Supabase credentials');
-        }
-        
-        const supabase = createClient(supabaseUrl, supabaseKey);
-
-        // Combine successful results
-        const allJobs = [
-          ...approach1Result.jobs,
-          ...approach2Result.jobs,
-          ...approach3Result.jobs
-        ];
-
-        console.log(`Total jobs fetched: ${allJobs.length}`);
-
-        if (allJobs.length === 0) {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              message: 'No jobs found from any approach',
-              errors: {
-                approach1: approach1Result.error,
-                approach2: approach2Result.error,
-                approach3: approach3Result.error
-              }
-            }),
-            {
-              status: 200,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            }
-          );
-        }
-
-        // Insert jobs with upsert
-        const { error: upsertError } = await supabase
-          .from('jobs')
-          .upsert(
-            allJobs.map(job => ({
-              ...job,
-              last_scraped_at: new Date().toISOString()
-            })),
-            {
-              onConflict: 'external_job_id,source',
-              ignoreDuplicates: true
-            }
-          );
-
-        if (upsertError) {
-          throw upsertError;
-        }
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: `Successfully processed ${allJobs.length} jobs`,
-            stats: {
-              approach1: {
-                jobs: approach1Result.jobs.length,
-                error: approach1Result.error
-              },
-              approach2: {
-                jobs: approach2Result.jobs.length,
-                error: approach2Result.error
-              },
-              approach3: {
-                jobs: approach3Result.jobs.length,
-                error: approach3Result.error
-              }
-            }
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
-      }
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
@@ -305,6 +193,29 @@ serve(async (req) => {
     }
     
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Try all approaches in parallel and collect results
+    console.log('Attempting all approaches in parallel...');
+    const [approach1Result, approach2Result, approach3Result] = await Promise.all([
+      fetchAdzunaJobsApproach1().catch(error => ({ jobs: [], error: error.message })),
+      fetchAdzunaJobsApproach2().catch(error => ({ jobs: [], error: error.message })),
+      fetchAdzunaJobsApproach3().catch(error => ({ jobs: [], error: error.message }))
+    ]);
+
+    console.log('Results from approaches:', {
+      approach1: {
+        jobCount: approach1Result.jobs.length,
+        hasError: !!approach1Result.error
+      },
+      approach2: {
+        jobCount: approach2Result.jobs.length,
+        hasError: !!approach2Result.error
+      },
+      approach3: {
+        jobCount: approach3Result.jobs.length,
+        hasError: !!approach3Result.error
+      }
+    });
 
     // Combine successful results
     const allJobs = [
@@ -377,16 +288,10 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Fatal error with full details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
-    
+    console.error('Fatal error in job fetching:', error);
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error occurred',
-        details: error instanceof Error ? error.stack : undefined,
         timestamp: new Date().toISOString()
       }),
       {
