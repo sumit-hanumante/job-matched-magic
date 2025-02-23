@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -6,23 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface AdzunaResponse {
-  results: Array<{
-    id: string;
-    title: string;
-    description: string;
-    created: string;
-    company: { display_name: string };
-    location: { display_name: string; area: string[] };
-    redirect_url: string;
-    salary_min: number;
-    salary_max: number;
-  }>;
-  count: number;
-}
-
 interface Job {
-  id?: string;
   title: string;
   company: string;
   location: string;
@@ -37,145 +22,155 @@ interface Job {
   posted_date: string;
 }
 
-const CONFIG = {
-  remoteok: {
-    enabled: true,
-    baseUrl: 'https://remoteok.com/api',
-  },
-  arbeitnow: {
-    enabled: true,
-    baseUrl: 'https://www.arbeitnow.com/api/job-board-api',
-  },
-  adzuna: {
-    enabled: true,
-    baseUrl: 'https://api.adzuna.com/v1/api/jobs/in/search/1',
-  }
-};
-
-async function fetchRemoteOKJobs(): Promise<Job[]> {
-  console.log('Fetching RemoteOK jobs...');
+// Approach 1: Using URL parameters
+async function fetchAdzunaJobsApproach1(): Promise<{ jobs: Job[]; error?: string }> {
   try {
-    const response = await fetch(CONFIG.remoteok.baseUrl);
+    const appId = Deno.env.get('ADZUNA_APP_ID');
+    const appKey = Deno.env.get('ADZUNA_APP_KEY');
     
-    if (!response.ok) {
-      throw new Error(`RemoteOK API error: ${response.status}`);
+    if (!appId || !appKey) {
+      return { jobs: [], error: 'Adzuna credentials missing' };
     }
 
-    const jobs = await response.json();
-    console.log(`RemoteOK jobs fetched: ${jobs.length - 1}`); // -1 because first item is metadata
-
-    return jobs.slice(1).map((job: any) => ({
-      title: job.position,
-      company: job.company,
-      location: job.location || 'Remote',
-      description: job.description,
-      apply_url: job.url,
-      salary_range: job.salary,
-      source: 'remoteok',
-      external_job_id: `ro_${job.id}`,
-      requirements: job.tags,
-      posted_date: new Date().toISOString()
-    }));
-  } catch (error) {
-    console.error('RemoteOK fetching error:', error);
-    return [];
-  }
-}
-
-async function fetchArbeitnowJobs(): Promise<Job[]> {
-  console.log('Fetching Arbeitnow jobs...');
-  try {
-    const response = await fetch(CONFIG.arbeitnow.baseUrl);
-    
-    if (!response.ok) {
-      throw new Error(`Arbeitnow API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log(`Arbeitnow jobs fetched: ${data.data?.length}`);
-
-    return data.data.map((job: any) => ({
-      title: job.title,
-      company: job.company_name,
-      location: job.location || 'Remote',
-      description: job.description,
-      apply_url: job.url,
-      source: 'arbeitnow',
-      external_job_id: `an_${job.slug}`,
-      requirements: [], 
-      salary_range: job.salary,
-      posted_date: new Date().toISOString()
-    }));
-  } catch (error) {
-    console.error('Arbeitnow fetching error:', error);
-    return [];
-  }
-}
-
-async function fetchAdzunaJobs(): Promise<Job[]> {
-  console.log('Starting Adzuna job fetch...');
-  
-  const appId = Deno.env.get('ADZUNA_APP_ID');
-  const appKey = Deno.env.get('ADZUNA_APP_KEY');
-  
-  if (!appId || !appKey) {
-    console.error('Adzuna credentials missing');
-    return [];
-  }
-
-  try {
     const url = new URL('https://api.adzuna.com/v1/api/jobs/in/search/1');
-    
-    // Add required parameters
     url.searchParams.append('app_id', appId);
     url.searchParams.append('app_key', appKey);
-    url.searchParams.append('results_per_page', '50');
-    url.searchParams.append('content-type', 'application/json');
-    
-    // Add search filters
+    url.searchParams.append('results_per_page', '20');
     url.searchParams.append('what', 'software developer');
-    url.searchParams.append('where', 'india');
-    url.searchParams.append('category', 'it-jobs');
+    url.searchParams.append('content-type', 'application/json');
 
-    console.log('Fetching from Adzuna URL:', url.toString());
+    console.log('Approach 1 - Fetching from:', url.toString());
     
     const response = await fetch(url.toString());
     
     if (!response.ok) {
-      console.error(`Adzuna API error: ${response.status} ${response.statusText}`);
       const errorText = await response.text();
-      console.error('Error details:', errorText);
-      return [];
+      throw new Error(`Adzuna API error: ${response.status} - ${errorText}`);
     }
 
-    const data: AdzunaResponse = await response.json();
-    console.log(`Received ${data.results?.length} jobs from Adzuna`);
+    const data = await response.json();
+    console.log('Approach 1 - Results:', data.results?.length || 0);
 
-    if (!data.results?.length) {
-      console.log('No results found in Adzuna response');
-      return [];
-    }
-
-    return data.results.map(job => ({
-      title: job.title.replace(/<\/?[^>]+(>|$)/g, "").trim(),
-      company: job.company.display_name || 'Unknown Company',
-      location: job.location.display_name || job.location.area?.join(', ') || 'India',
-      description: job.description || '',
-      apply_url: job.redirect_url,
-      source: 'adzuna',
-      external_job_id: `az_${job.id}`,
-      requirements: [],
-      salary_range: job.salary_min || job.salary_max ? 
-        `₹${job.salary_min?.toLocaleString() || '0'} - ₹${job.salary_max?.toLocaleString() || '0'}` : 
-        undefined,
-      salary_min: job.salary_min,
-      salary_max: job.salary_max,
-      posted_date: new Date(job.created).toISOString()
-    }));
-
+    return {
+      jobs: (data.results || []).map((job: any) => ({
+        title: job.title?.replace(/<\/?[^>]+(>|$)/g, "").trim() || 'Unknown Title',
+        company: job.company?.display_name || 'Unknown Company',
+        location: job.location?.display_name || 'India',
+        description: job.description || '',
+        apply_url: job.redirect_url,
+        source: 'adzuna',
+        external_job_id: `az1_${job.id}`,
+        salary_min: job.salary_min,
+        salary_max: job.salary_max,
+        salary_range: job.salary_min ? `₹${job.salary_min.toLocaleString()}` : undefined,
+        posted_date: new Date(job.created || Date.now()).toISOString()
+      }))
+    };
   } catch (error) {
-    console.error('Error in Adzuna fetch:', error);
-    return [];
+    console.error('Approach 1 error:', error);
+    return { jobs: [], error: error.message };
+  }
+}
+
+// Approach 2: Using direct API endpoint
+async function fetchAdzunaJobsApproach2(): Promise<{ jobs: Job[]; error?: string }> {
+  try {
+    const appId = Deno.env.get('ADZUNA_APP_ID');
+    const appKey = Deno.env.get('ADZUNA_APP_KEY');
+    
+    if (!appId || !appKey) {
+      return { jobs: [], error: 'Adzuna credentials missing' };
+    }
+
+    const baseUrl = 'https://api.adzuna.com/v1/api/jobs/in/search/1';
+    const url = `${baseUrl}?app_id=${appId}&app_key=${appKey}&results_per_page=20&what=software%20engineer&content-type=application/json`;
+    
+    console.log('Approach 2 - Fetching jobs...');
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Approach 2 - Results:', data.results?.length || 0);
+
+    return {
+      jobs: (data.results || []).map((job: any) => ({
+        title: job.title?.replace(/<\/?[^>]+(>|$)/g, "").trim() || 'Unknown Title',
+        company: job.company?.display_name || 'Unknown Company',
+        location: job.location?.display_name || 'India',
+        description: job.description || '',
+        apply_url: job.redirect_url,
+        source: 'adzuna',
+        external_job_id: `az2_${job.id}`,
+        salary_min: job.salary_min,
+        salary_max: job.salary_max,
+        salary_range: job.salary_min ? `₹${job.salary_min.toLocaleString()}` : undefined,
+        posted_date: new Date(job.created || Date.now()).toISOString()
+      }))
+    };
+  } catch (error) {
+    console.error('Approach 2 error:', error);
+    return { jobs: [], error: error.message };
+  }
+}
+
+// Approach 3: Using additional parameters
+async function fetchAdzunaJobsApproach3(): Promise<{ jobs: Job[]; error?: string }> {
+  try {
+    const appId = Deno.env.get('ADZUNA_APP_ID');
+    const appKey = Deno.env.get('ADZUNA_APP_KEY');
+    
+    if (!appId || !appKey) {
+      return { jobs: [], error: 'Adzuna credentials missing' };
+    }
+
+    const url = new URL('https://api.adzuna.com/v1/api/jobs/in/search/1');
+    const params = {
+      app_id: appId,
+      app_key: appKey,
+      results_per_page: '20',
+      what: 'software engineer',
+      where: 'india',
+      content_type: 'application/json',
+      category: 'it-jobs'
+    };
+
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.append(key, value);
+    });
+
+    console.log('Approach 3 - Fetching from:', url.toString());
+    
+    const response = await fetch(url.toString());
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Approach 3 - Results:', data.results?.length || 0);
+
+    return {
+      jobs: (data.results || []).map((job: any) => ({
+        title: job.title?.replace(/<\/?[^>]+(>|$)/g, "").trim() || 'Unknown Title',
+        company: job.company?.display_name || 'Unknown Company',
+        location: job.location?.display_name || 'India',
+        description: job.description || '',
+        apply_url: job.redirect_url,
+        source: 'adzuna',
+        external_job_id: `az3_${job.id}`,
+        salary_min: job.salary_min,
+        salary_max: job.salary_max,
+        salary_range: job.salary_min ? `₹${job.salary_min.toLocaleString()}` : undefined,
+        posted_date: new Date(job.created || Date.now()).toISOString()
+      }))
+    };
+  } catch (error) {
+    console.error('Approach 3 error:', error);
+    return { jobs: [], error: error.message };
   }
 }
 
@@ -185,37 +180,51 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting job fetching process...');
+    console.log('Starting job fetching process with multiple approaches...');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing required environment variables');
+      throw new Error('Missing Supabase credentials');
     }
     
     const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    // Test Adzuna fetch first
-    console.log('Testing Adzuna fetch...');
-    const adzunaJobs = await fetchAdzunaJobs();
-    console.log(`Fetched ${adzunaJobs.length} Adzuna jobs`);
 
-    // If we got Adzuna jobs, proceed with other sources
-    const remoteOkJobs = await fetchRemoteOKJobs();
-    const arbeitnowJobs = await fetchArbeitnowJobs();
-    
-    const allJobs = [...adzunaJobs, ...remoteOkJobs, ...arbeitnowJobs];
+    // Try all three approaches
+    const [approach1Result, approach2Result, approach3Result] = await Promise.all([
+      fetchAdzunaJobsApproach1(),
+      fetchAdzunaJobsApproach2(),
+      fetchAdzunaJobsApproach3()
+    ]);
+
+    console.log('Results from approaches:', {
+      approach1: approach1Result.jobs.length,
+      approach2: approach2Result.jobs.length,
+      approach3: approach3Result.jobs.length
+    });
+
+    // Combine successful results
+    const allJobs = [
+      ...approach1Result.jobs,
+      ...approach2Result.jobs,
+      ...approach3Result.jobs
+    ];
+
     console.log(`Total jobs fetched: ${allJobs.length}`);
 
     if (allJobs.length === 0) {
-      console.log('No jobs found from any source');
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: 'No jobs found from any source'
+        JSON.stringify({
+          success: false,
+          message: 'No jobs found from any approach',
+          errors: {
+            approach1: approach1Result.error,
+            approach2: approach2Result.error,
+            approach3: approach3Result.error
+          }
         }),
-        { 
+        {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
@@ -223,7 +232,6 @@ serve(async (req) => {
     }
 
     // Insert jobs with upsert
-    console.log('Upserting jobs to database...');
     const { error: upsertError } = await supabase
       .from('jobs')
       .upsert(
@@ -231,33 +239,36 @@ serve(async (req) => {
           ...job,
           last_scraped_at: new Date().toISOString()
         })),
-        { 
+        {
           onConflict: 'external_job_id,source',
-          ignoreDuplicates: false
+          ignoreDuplicates: true
         }
       );
 
     if (upsertError) {
-      console.error('Database insertion error:', upsertError);
       throw upsertError;
     }
 
-    console.log('Jobs successfully updated in database');
-
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         message: `Successfully processed ${allJobs.length} jobs`,
         stats: {
-          total: allJobs.length,
-          bySource: {
-            adzuna: adzunaJobs.length,
-            remoteok: remoteOkJobs.length,
-            arbeitnow: arbeitnowJobs.length
+          approach1: {
+            jobs: approach1Result.jobs.length,
+            error: approach1Result.error
+          },
+          approach2: {
+            jobs: approach2Result.jobs.length,
+            error: approach2Result.error
+          },
+          approach3: {
+            jobs: approach3Result.jobs.length,
+            error: approach3Result.error
           }
         }
       }),
-      { 
+      {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
@@ -266,11 +277,11 @@ serve(async (req) => {
   } catch (error) {
     console.error('Fatal error in job fetching:', error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error occurred',
         timestamp: new Date().toISOString()
       }),
-      { 
+      {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
