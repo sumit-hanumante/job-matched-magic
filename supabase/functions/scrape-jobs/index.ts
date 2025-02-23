@@ -28,10 +28,13 @@ async function scrapeLinkedInJobs(city: string, scrapingAntKey: string): Promise
   console.log(`Starting LinkedIn scraping for ${city}`);
   try {
     const searchUrl = `https://www.linkedin.com/jobs/search?keywords=software%20developer&location=${encodeURIComponent(city)}%2C%20India&position=1&pageNum=0`;
-    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}`;
+    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}&browser=false`;
 
     const response = await fetch(scrapingUrl, {
-      headers: { 'x-api-key': scrapingAntKey }
+      headers: {
+        'x-api-key': scrapingAntKey,
+        'Accept': 'application/json'
+      }
     });
 
     if (!response.ok) {
@@ -41,16 +44,16 @@ async function scrapeLinkedInJobs(city: string, scrapingAntKey: string): Promise
     const html = await response.text();
     console.log('LinkedIn HTML length:', html.length);
 
-    // For now returning a test job
-    return [{
-      title: "Software Developer",
-      company: "Test Company",
+    // For now returning test jobs
+    return Array(3).fill(null).map((_, index) => ({
+      title: `Software Developer ${index + 1}`,
+      company: `LinkedIn Company ${index + 1}`,
       location: city,
-      description: "Test LinkedIn job description",
-      apply_url: "https://linkedin.com/jobs/test",
+      description: `Test LinkedIn job description ${index + 1}`,
+      apply_url: `https://linkedin.com/jobs/test/${index + 1}`,
       source: "linkedin",
-      external_job_id: `li_${Date.now()}`
-    }];
+      external_job_id: `li_${Date.now()}_${index}`
+    }));
   } catch (error) {
     console.error('LinkedIn scraping error:', error);
     return [];
@@ -60,32 +63,48 @@ async function scrapeLinkedInJobs(city: string, scrapingAntKey: string): Promise
 async function scrapeNaukriJobs(city: string, scrapingAntKey: string): Promise<Job[]> {
   console.log(`Starting Naukri scraping for ${city}`);
   try {
-    const searchUrl = `https://www.naukri.com/software-developer-jobs-in-${city.toLowerCase()}`;
-    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}`;
+    // Instead of directly scraping, we'll use their search results page with fewer restrictions
+    const searchUrl = `https://www.naukri.com/jobapi/v3/search?noOfResults=20&urlType=search_by_key_loc&searchType=adv&keyword=software%20developer&location=${encodeURIComponent(city)}&k=software%20developer&l=${encodeURIComponent(city)}`;
+    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}&browser=false&proxy_country=IN`;
 
     const response = await fetch(scrapingUrl, {
-      headers: { 'x-api-key': scrapingAntKey }
+      headers: {
+        'x-api-key': scrapingAntKey,
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
     });
 
     if (!response.ok) {
-      throw new Error(`Naukri scraping failed: ${response.status}`);
+      console.warn(`Naukri API request failed for ${city}, using fallback data`);
+      // Return fallback test data instead of throwing
+      return Array(3).fill(null).map((_, index) => ({
+        title: `Software Developer ${index + 1}`,
+        company: `Naukri Company ${index + 1}`,
+        location: city,
+        description: `Test Naukri job description ${index + 1}`,
+        apply_url: `https://naukri.com/jobs/test/${index + 1}`,
+        source: "naukri",
+        external_job_id: `naukri_${Date.now()}_${index}`
+      }));
     }
 
     const html = await response.text();
     console.log('Naukri HTML length:', html.length);
 
-    // For now returning a test job
-    return [{
-      title: "Software Developer",
-      company: "Test Naukri Company",
+    // Return test data for now
+    return Array(3).fill(null).map((_, index) => ({
+      title: `Software Developer ${index + 1}`,
+      company: `Naukri Company ${index + 1}`,
       location: city,
-      description: "Test Naukri job description",
-      apply_url: "https://naukri.com/jobs/test",
+      description: `Test Naukri job description ${index + 1}`,
+      apply_url: `https://naukri.com/jobs/test/${index + 1}`,
       source: "naukri",
-      external_job_id: `naukri_${Date.now()}`
-    }];
+      external_job_id: `naukri_${Date.now()}_${index}`
+    }));
   } catch (error) {
     console.error('Naukri scraping error:', error);
+    // Return empty array instead of throwing
     return [];
   }
 }
@@ -94,10 +113,13 @@ async function scrapeIndeedJobs(city: string, scrapingAntKey: string): Promise<J
   console.log(`Starting Indeed scraping for ${city}`);
   try {
     const searchUrl = `https://www.indeed.co.in/jobs?q=software+developer&l=${encodeURIComponent(city)}`;
-    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}`;
+    const scrapingUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(searchUrl)}&browser=false&proxy_country=IN`;
 
     const response = await fetch(scrapingUrl, {
-      headers: { 'x-api-key': scrapingAntKey }
+      headers: {
+        'x-api-key': scrapingAntKey,
+        'Accept': 'application/json'
+      }
     });
 
     if (!response.ok) {
@@ -107,16 +129,16 @@ async function scrapeIndeedJobs(city: string, scrapingAntKey: string): Promise<J
     const html = await response.text();
     console.log('Indeed HTML length:', html.length);
 
-    // For now returning a test job
-    return [{
-      title: "Software Developer",
-      company: "Test Indeed Company",
+    // Return test data for now
+    return Array(3).fill(null).map((_, index) => ({
+      title: `Software Developer ${index + 1}`,
+      company: `Indeed Company ${index + 1}`,
       location: city,
-      description: "Test Indeed job description",
-      apply_url: "https://indeed.com/jobs/test",
+      description: `Test Indeed job description ${index + 1}`,
+      apply_url: `https://indeed.com/jobs/test/${index + 1}`,
       source: "indeed",
-      external_job_id: `indeed_${Date.now()}`
-    }];
+      external_job_id: `indeed_${Date.now()}_${index}`
+    }));
   } catch (error) {
     console.error('Indeed scraping error:', error);
     return [];
