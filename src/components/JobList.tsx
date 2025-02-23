@@ -25,6 +25,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isScrapingJobs, setIsScrapingJobs] = useState(false);
   const [uniqueSources, setUniqueSources] = useState<SourceCount[]>([]);
+  const [scrapingError, setScrapingError] = useState<string | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -44,24 +45,36 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const scrapeJobs = async () => {
     try {
       setIsScrapingJobs(true);
+      setScrapingError(null);
+      
+      console.log('Starting job scraping...');
       const response = await supabase.functions.invoke('scrape-jobs');
       
       if (response.error) {
+        console.error('Scraping error:', response.error);
         throw new Error(response.error.message);
+      }
+
+      console.log('Scraping response:', response.data);
+      
+      if (response.data?.error) {
+        throw new Error(response.data.error);
       }
       
       toast({
         title: "Jobs Updated",
-        description: "New jobs have been fetched successfully",
+        description: response.data?.message || "New jobs have been fetched successfully",
       });
       
       // Refresh the jobs list
       await fetchJobs();
     } catch (error) {
       console.error('Error scraping jobs:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch new jobs';
+      setScrapingError(errorMessage);
       toast({
         title: "Error",
-        description: "Failed to fetch new jobs.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -162,30 +175,37 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div className="space-y-1">
-          <p className="text-sm text-muted-foreground">
-            {jobs.length} jobs found from legal sources, last updated {" "}
-            {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Sources: {activeSources.map(s => `${s.source} (${s.count})`).join(', ') || 'None'}
-          </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex justify-between items-center">
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">
+              {jobs.length} jobs found from legal sources, last updated {" "}
+              {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Sources: {activeSources.map(s => `${s.source} (${s.count})`).join(', ') || 'None'}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => fetchJobs()}
+              variant="outline"
+            >
+              Refresh Jobs
+            </Button>
+            <Button 
+              onClick={() => scrapeJobs()}
+              disabled={isScrapingJobs}
+            >
+              {isScrapingJobs ? "Fetching..." : "Fetch New Jobs"}
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={() => fetchJobs()}
-            variant="outline"
-          >
-            Refresh Jobs
-          </Button>
-          <Button 
-            onClick={() => scrapeJobs()}
-            disabled={isScrapingJobs}
-          >
-            {isScrapingJobs ? "Fetching..." : "Fetch New Jobs"}
-          </Button>
-        </div>
+        {scrapingError && (
+          <div className="p-4 border border-red-200 bg-red-50 rounded-md">
+            <p className="text-sm text-red-600">Error while fetching new jobs: {scrapingError}</p>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {jobs.map((job) => (
