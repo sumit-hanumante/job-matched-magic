@@ -19,6 +19,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScrapingJobs, setIsScrapingJobs] = useState(false);
+  const [uniqueSources, setUniqueSources] = useState<string[]>([]);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -66,12 +67,23 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const fetchJobs = async () => {
     console.log('Fetching jobs...');
     try {
-      // Simply fetch all jobs without any matching logic
+      // For testing: Only fetch LinkedIn jobs and log unique sources
       const { data: jobsData, error: jobsError } = await supabase
         .from('jobs')
         .select('*')
+        .eq('source', 'linkedin') // Filter for LinkedIn jobs only
         .order('posted_date', { ascending: false })
         .limit(INITIAL_JOB_LIMIT);
+
+      // Get unique sources for debugging
+      const { data: sourcesData } = await supabase
+        .from('jobs')
+        .select('source')
+        .distinct();
+      
+      const sources = sourcesData?.map(item => item.source) || [];
+      setUniqueSources(sources);
+      console.log('Unique job sources in database:', sources);
 
       console.log('Jobs response:', { jobsData, jobsError });
 
@@ -79,7 +91,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
 
       const transformedJobs = jobsData?.map(job => ({
         ...job,
-        matchScore: 0, // Set default match score to 0
+        matchScore: 0,
         postedDate: new Date(job.posted_date).toISOString().split('T')[0],
         applyUrl: job.apply_url,
         salaryRange: job.salary_range,
@@ -131,10 +143,15 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">
-          {jobs.length} jobs found, last updated {" "}
-          {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
-        </p>
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">
+            {jobs.length} LinkedIn jobs found, last updated {" "}
+            {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Available sources in database: {uniqueSources.join(', ')}
+          </p>
+        </div>
         <div className="flex gap-2">
           <Button 
             onClick={() => fetchJobs()}
