@@ -107,56 +107,95 @@ async function fetchAdzunaJobs(): Promise<Job[]> {
     });
 
     if (!appId || !appKey) {
-      console.warn('Adzuna API credentials not found');
+      console.warn('Adzuna API credentials missing');
       return [];
     }
 
-    const url = new URL(CONFIG.adzuna.baseUrl);
-    url.searchParams.append('app_id', appId);
-    url.searchParams.append('app_key', appKey);
-    url.searchParams.append('what', 'software developer');
-    url.searchParams.append('results_per_page', '50');
-    url.searchParams.append('content-type', 'application/json');
-    url.searchParams.append('where', 'india');  // Added location filter for India
-    url.searchParams.append('category', 'it-jobs');  // Added IT jobs category
-
-    console.log('Fetching from Adzuna URL:', url.toString());
-    
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Accept': 'application/json'
-      }
+    const params = new URLSearchParams({
+      app_id: appId,
+      app_key: appKey,
+      results_per_page: '50',
+      what: 'software developer',
+      where: 'india',
+      category: 'it-jobs',
+      country: 'in',
+      sort_by: 'date',
+      full_time: '1',
+      content_type: 'application/json'
     });
+
+    const url = `${CONFIG.adzuna.baseUrl}?${params.toString()}`;
+    console.log('Fetching from Adzuna URL:', url);
+
+    const response = await fetch(url);
+    const responseText = await response.text(); // Get raw response text first
+    console.log('Raw Adzuna response:', responseText);
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Adzuna API error response:', errorText);
+      console.error('Adzuna API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        response: responseText
+      });
       return [];
     }
 
-    const data = await response.json();
-    console.log('Raw Adzuna response:', data); // Added more detailed logging
-    console.log(`Adzuna jobs fetched:`, data.results?.length || 0);
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse Adzuna response:', e);
+      return [];
+    }
 
-    if (!data.results || data.results.length === 0) {
+    console.log('Parsed Adzuna response:', {
+      count: data.count,
+      resultsCount: data.results?.length,
+      sample: data.results?.[0]
+    });
+
+    if (!data.results || !Array.isArray(data.results) || data.results.length === 0) {
       console.warn('No results found in Adzuna response');
       return [];
     }
 
-    return data.results.map((job: any) => ({
-      title: job.title || 'Unknown Title',
-      company: job.company?.display_name || 'Unknown Company',
-      location: job.location?.display_name || 'Unknown Location',
-      description: job.description || '',
-      apply_url: job.redirect_url,
-      source: 'adzuna',
-      external_job_id: `az_${job.id}`,
-      requirements: [], 
-      salary_range: job.salary_min && job.salary_max ? 
-        `${job.salary_min} - ${job.salary_max}` : undefined,
-      salary_min: job.salary_min,
-      salary_max: job.salary_max
-    }));
+    const jobs = data.results.map((job: any) => {
+      const jobData = {
+        title: job.title?.replace(/<\/?[^>]+(>|$)/g, "").trim() || 'Unknown Title',
+        company: job.company?.display_name || 'Unknown Company',
+        location: job.location?.area?.join(', ') || job.location?.display_name || 'India',
+        description: job.description || '',
+        apply_url: job.redirect_url,
+        source: 'adzuna',
+        external_job_id: `az_${job.id}`,
+        requirements: [], 
+        salary_range: undefined as string | undefined,
+        salary_min: undefined as number | undefined,
+        salary_max: undefined as number | undefined
+      };
+
+      // Handle salary information
+      if (job.salary_min || job.salary_max) {
+        const min = Math.round(job.salary_min);
+        const max = Math.round(job.salary_max);
+        jobData.salary_min = min || undefined;
+        jobData.salary_max = max || undefined;
+        if (min && max) {
+          jobData.salary_range = `₹${min.toLocaleString()} - ₹${max.toLocaleString()}`;
+        } else if (min) {
+          jobData.salary_range = `From ₹${min.toLocaleString()}`;
+        } else if (max) {
+          jobData.salary_range = `Up to ₹${max.toLocaleString()}`;
+        }
+      }
+
+      return jobData;
+    });
+
+    console.log(`Successfully processed ${jobs.length} Adzuna jobs`);
+    console.log('Sample job:', jobs[0]);
+
+    return jobs;
   } catch (error) {
     console.error('Adzuna fetching error:', error);
     return [];
