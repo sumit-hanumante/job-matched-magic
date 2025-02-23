@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -18,7 +19,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScrapingJobs, setIsScrapingJobs] = useState(false);
-  const [uniqueSources, setUniqueSources] = useState<string[]>([]);
+  const [uniqueSources, setUniqueSources] = useState<{ source: string; count: number }[]>([]);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -66,23 +67,28 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   const fetchJobs = async () => {
     console.log('Fetching jobs...');
     try {
-      // Get unique sources first using a separate query
-      const sourcesQuery = await supabase
+      // Get count of jobs by source
+      const { data: sourceCounts, error: sourceError } = await supabase
         .from('jobs')
-        .select('source', { count: 'exact' })
-        .limit(1000);
-      
-      if (sourcesQuery.data) {
-        const sources = [...new Set(sourcesQuery.data.map(item => item.source))];
+        .select('source, count(*)', { count: 'exact' })
+        .group('source');
+
+      if (sourceError) throw sourceError;
+
+      if (sourceCounts) {
+        const sources = sourceCounts.map(item => ({
+          source: item.source,
+          count: parseInt(item.count as string)
+        }));
         setUniqueSources(sources);
-        console.log('Unique job sources in database:', sources);
+        console.log('Job counts by source:', sources);
       }
 
       // Fetch all jobs from legal sources
       const { data: jobsData, error: jobsError } = await supabase
         .from('jobs')
         .select('*')
-        .in('source', ['remoteok', 'arbeitnow', 'adzuna']) // Updated legal sources
+        .in('source', ['remoteok', 'arbeitnow', 'adzuna'])
         .order('posted_date', { ascending: false })
         .limit(INITIAL_JOB_LIMIT);
 
@@ -142,7 +148,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   }
 
   const legalSources = ['remoteok', 'arbeitnow', 'adzuna'];
-  const activeSources = uniqueSources.filter(source => legalSources.includes(source));
+  const activeSources = uniqueSources.filter(s => legalSources.includes(s.source));
 
   return (
     <div className="space-y-6">
@@ -153,7 +159,7 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
             {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
           </p>
           <p className="text-xs text-muted-foreground">
-            Active sources: {activeSources.join(', ') || 'None'}
+            Sources: {activeSources.map(s => `${s.source} (${s.count})`).join(', ') || 'None'}
           </p>
         </div>
         <div className="flex gap-2">
