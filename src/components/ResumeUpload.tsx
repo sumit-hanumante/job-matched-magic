@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Upload, FileText, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -13,6 +14,7 @@ const ResumeUpload = () => {
     filename?: string;
     status?: string;
     uploaded_at?: string;
+    id?: string;
   } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -27,7 +29,7 @@ const ResumeUpload = () => {
     try {
       const { data, error } = await supabase
         .from('resumes')
-        .select('file_name, status, created_at')
+        .select('id, file_name, status, created_at')
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -37,6 +39,7 @@ const ResumeUpload = () => {
 
       if (data) {
         setCurrentResume({
+          id: data.id,
           filename: data.file_name,
           status: data.status,
           uploaded_at: new Date(data.created_at).toLocaleDateString()
@@ -92,19 +95,25 @@ const ResumeUpload = () => {
 
     setIsUploading(true);
     try {
-      const { data: existingResumes } = await supabase
-        .from('resumes')
-        .select('file_path')
-        .eq('user_id', user.id);
+      // First, delete the old resume file if it exists
+      if (currentResume?.id) {
+        const { data: existingResumes } = await supabase
+          .from('resumes')
+          .select('file_path')
+          .eq('id', currentResume.id)
+          .single();
 
-      if (existingResumes?.length) {
-        for (const resume of existingResumes) {
-          if (resume.file_path) {
-            await supabase.storage
-              .from('resumes')
-              .remove([resume.file_path]);
-          }
+        if (existingResumes?.file_path) {
+          await supabase.storage
+            .from('resumes')
+            .remove([existingResumes.file_path]);
         }
+
+        // Delete the old resume record
+        await supabase
+          .from('resumes')
+          .delete()
+          .eq('id', currentResume.id);
       }
 
       const fileExt = file.name.split('.').pop();
@@ -117,11 +126,6 @@ const ResumeUpload = () => {
 
       if (uploadError) throw uploadError;
 
-      await supabase
-        .from('resumes')
-        .delete()
-        .eq('user_id', user.id);
-
       const { error: dbError } = await supabase
         .from('resumes')
         .insert({
@@ -129,7 +133,8 @@ const ResumeUpload = () => {
           file_name: file.name,
           file_path: filePath,
           content_type: file.type,
-          status: 'pending'
+          status: 'pending',
+          created_at: new Date().toISOString()
         });
 
       if (dbError) throw dbError;
@@ -168,7 +173,7 @@ const ResumeUpload = () => {
           </p>
           <div className="flex justify-between items-center mt-2 text-xs text-muted-foreground">
             <span>Uploaded: {currentResume.uploaded_at}</span>
-            <span className="capitalize">Status: {currentResume.status}</span>
+            <span className="Capitalize">Status: {currentResume.status}</span>
           </div>
         </div>
       )}
