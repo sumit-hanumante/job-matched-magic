@@ -5,10 +5,10 @@ import JobCard from "./JobCard";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { JobFilters } from "./JobFilters";
+import { JobListHeader } from "./JobListHeader";
 
 interface JobListProps {
   jobs?: Job[];
@@ -20,7 +20,6 @@ interface SourceCount {
 }
 
 const INITIAL_JOB_LIMIT = 20;
-const JOB_TYPES = ["software developer", "medical coding"];
 
 const JobList = ({ jobs: propJobs }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -51,20 +50,12 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
       setIsScrapingJobs(true);
       setScrapingError(null);
       
-      console.log('Starting job scraping for:', selectedJobType);
       const response = await supabase.functions.invoke('scrape-jobs', {
         body: { jobType: selectedJobType }
       });
       
-      if (response.error) {
-        console.error('Scraping error:', response.error);
-        throw new Error(response.error.message);
-      }
-
-      console.log('Scraping response:', response.data);
-      
-      if (response.data?.error) {
-        throw new Error(response.data.error);
+      if (response.error || response.data?.error) {
+        throw new Error(response.error?.message || response.data?.error);
       }
       
       toast({
@@ -74,7 +65,6 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
       
       await fetchJobs();
     } catch (error) {
-      console.error('Error scraping jobs:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch new jobs';
       setScrapingError(errorMessage);
       toast({
@@ -88,11 +78,8 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
   };
 
   const fetchJobs = async () => {
-    console.log('Fetching jobs...');
     try {
-      let query = supabase
-        .from('jobs')
-        .select('*');
+      let query = supabase.from('jobs').select('*');
       
       if (selectedSource !== 'all') {
         query = query.eq('source', selectedSource);
@@ -110,16 +97,12 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
           return acc;
         }, {});
 
-        const sources: SourceCount[] = Object.entries(sourceCounts).map(([source, count]) => ({
+        setUniqueSources(Object.entries(sourceCounts).map(([source, count]) => ({
           source,
-          count: count
-        }));
-        
-        setUniqueSources(sources);
-        console.log('Job counts by source:', sources);
+          count
+        })));
       }
 
-      // Get the latest jobs for display
       let latestJobsQuery = supabase
         .from('jobs')
         .select('*')
@@ -145,10 +128,8 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
         lastScrapedAt: job.last_scraped_at
       })) || [];
 
-      console.log('Transformed jobs:', transformedJobs);
       setJobs(transformedJobs);
     } catch (error) {
-      console.error('Error fetching jobs:', error);
       toast({
         title: "Error",
         description: "Failed to fetch jobs.",
@@ -194,50 +175,21 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">
-              {jobs.length} jobs found from {selectedSource === 'all' ? 'all' : selectedSource}, last updated {" "}
-              {jobs[0]?.lastScrapedAt ? new Date(jobs[0].lastScrapedAt).toLocaleString() : "never"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Sources: {activeSources.map(s => `${s.source} (${s.count})`).join(', ') || 'None'}
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Select value={selectedSource} onValueChange={setSelectedSource}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sources</SelectItem>
-                {legalSources.map(source => (
-                  <SelectItem key={source} value={source}>{source}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={selectedJobType} onValueChange={setSelectedJobType}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select job type" />
-              </SelectTrigger>
-              <SelectContent>
-                {JOB_TYPES.map(type => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button 
-              onClick={() => fetchJobs()}
-              variant="outline"
-            >
-              Refresh Jobs
-            </Button>
-            <Button 
-              onClick={() => scrapeJobs()}
-              disabled={isScrapingJobs}
-            >
-              {isScrapingJobs ? "Fetching..." : "Fetch New Jobs"}
-            </Button>
-          </div>
+          <JobListHeader 
+            jobCount={jobs.length}
+            selectedSource={selectedSource}
+            lastUpdated={jobs[0]?.lastScrapedAt}
+            activeSources={activeSources}
+          />
+          <JobFilters 
+            selectedSource={selectedSource}
+            selectedJobType={selectedJobType}
+            onSourceChange={setSelectedSource}
+            onJobTypeChange={setSelectedJobType}
+            onRefresh={fetchJobs}
+            onFetchJobs={scrapeJobs}
+            isScrapingJobs={isScrapingJobs}
+          />
         </div>
         {scrapingError && (
           <div className="p-4 border border-red-200 bg-red-50 rounded-md">
