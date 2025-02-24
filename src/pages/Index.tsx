@@ -22,6 +22,16 @@ const Index = () => {
           </section>
         ) : (
           <>
+            <section id="resume" className="scroll-mt-32">
+              <div className="text-center mb-12">
+                <h2 className="text-3xl font-bold mb-4">Upload Your Resume</h2>
+                <p className="text-muted-foreground max-w-2xl mx-auto">
+                  Upload your resume to get personalized job matches based on your skills and experience.
+                </p>
+              </div>
+              <ResumeUpload />
+            </section>
+
             <section id="matches" className="scroll-mt-32">
               <div className="text-center mb-12">
                 <h2 className="text-3xl font-bold mb-4">Your Job Matches</h2>

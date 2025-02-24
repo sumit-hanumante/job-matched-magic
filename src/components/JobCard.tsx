@@ -37,7 +37,7 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
     : cleanDescription;
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 h-full flex flex-col justify-between">
+    <div className="bg-white p-6 rounded-lg border border-gray-100 h-full flex flex-col justify-between transition-all duration-200 hover:shadow-lg hover:border-gray-200">
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <span className="inline-block px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full">
@@ -93,17 +93,18 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
           </div>
         )}
         
-        <Button
-          onClick={onClick}
-          variant="outline"
-          size="sm"
-          className="w-full group hover:border-primary"
-        >
-          <span className="inline-flex items-center gap-1">
-            Apply Now
-            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-          </span>
-        </Button>
+        <div className="flex justify-end">
+          <Button
+            onClick={onClick}
+            size="sm"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm transition-all duration-200 hover:shadow-md hover:translate-y-[-1px]"
+          >
+            <span className="inline-flex items-center gap-1">
+              Apply Now
+              <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            </span>
+          </Button>
+        </div>
       </div>
     </div>
   );
