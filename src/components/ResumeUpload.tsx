@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Upload, FileText, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -93,7 +92,6 @@ const ResumeUpload = () => {
 
     setIsUploading(true);
     try {
-      // First, remove any existing resume files for this user
       const { data: existingResumes } = await supabase
         .from('resumes')
         .select('file_path')
@@ -109,25 +107,21 @@ const ResumeUpload = () => {
         }
       }
 
-      // Create unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      // Upload file to storage
       const { error: uploadError } = await supabase.storage
         .from('resumes')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // Delete existing resume records for this user
       await supabase
         .from('resumes')
         .delete()
         .eq('user_id', user.id);
 
-      // Save new resume to resumes table
       const { error: dbError } = await supabase
         .from('resumes')
         .insert({
@@ -149,9 +143,7 @@ const ResumeUpload = () => {
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
-      // Refresh the current resume status
       fetchCurrentResume();
-      
     } catch (error) {
       console.error('Upload error:', error);
       toast({
@@ -163,6 +155,8 @@ const ResumeUpload = () => {
       setIsUploading(false);
     }
   };
+
+  if (!user) return null;
 
   return (
     <div className="w-full max-w-xl mx-auto">

@@ -22,11 +22,6 @@ const Index = () => {
           </section>
         ) : (
           <>
-            <section id="upload" className="scroll-mt-32">
-              <h2 className="text-3xl font-bold text-center mb-8">Upload Your Resume</h2>
-              <ResumeUpload />
-            </section>
-
             <section id="matches" className="scroll-mt-32">
               <div className="text-center mb-12">
                 <h2 className="text-3xl font-bold mb-4">Your Job Matches</h2>
