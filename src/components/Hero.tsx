@@ -3,7 +3,11 @@ import { ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef } from "react";
 
-const Hero = () => {
+interface HeroProps {
+  onGetStarted?: () => void;
+}
+
+const Hero = ({ onGetStarted }: HeroProps) => {
   const dotsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,20 +34,6 @@ const Hero = () => {
     const interval = setInterval(createDot, 300);
     return () => clearInterval(interval);
   }, []);
-
-  const scrollToSection = () => {
-    const section = document.getElementById('auth') || document.getElementById('upload');
-    if (section) {
-      const offset = 80;
-      const elementPosition = section.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - offset;
-      
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
-    }
-  };
 
   return (
     <div className="min-h-[90vh] flex flex-col items-center justify-center text-center px-4 relative overflow-hidden">
@@ -85,7 +75,7 @@ const Hero = () => {
       </p>
       
       <Button
-        onClick={scrollToSection}
+        onClick={onGetStarted}
         size="lg"
         className="text-base px-8 py-6 animate-fade-in shadow-lg hover:shadow-xl transition-all duration-300"
         style={{ animationDelay: "1.2s" }}
