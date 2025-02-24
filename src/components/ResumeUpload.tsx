@@ -16,6 +16,7 @@ const ResumeUpload = () => {
     status?: string;
     uploaded_at?: string;
     id?: string;
+    file_path?: string;
   } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -32,10 +33,8 @@ const ResumeUpload = () => {
     try {
       const { data, error } = await supabase
         .from('resumes')
-        .select('id, file_name, status, created_at')
+        .select('id, file_name, status, created_at, file_path')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
         .maybeSingle();
 
       if (error) {
@@ -48,8 +47,11 @@ const ResumeUpload = () => {
           id: data.id,
           filename: data.file_name,
           status: data.status,
-          uploaded_at: new Date(data.created_at).toLocaleDateString()
+          uploaded_at: new Date(data.created_at).toLocaleDateString(),
+          file_path: data.file_path
         });
+      } else {
+        setCurrentResume(null);
       }
     } catch (error) {
       console.error('Error fetching resume:', error);
@@ -100,43 +102,23 @@ const ResumeUpload = () => {
     if (!file || !user) return;
 
     setIsUploading(true);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    const filePath = `${user.id}/${fileName}`;
+
     try {
-      // First, delete the old resume file if it exists
-      if (currentResume?.id) {
-        // Get the file path of the existing resume
-        const { data: existingResume } = await supabase
+      // If there's an existing file, delete it from storage
+      if (currentResume?.file_path) {
+        const { error: deleteError } = await supabase.storage
           .from('resumes')
-          .select('file_path')
-          .eq('id', currentResume.id)
-          .single();
-
-        if (existingResume?.file_path) {
-          // Delete the old file from storage
-          const { error: deleteStorageError } = await supabase.storage
-            .from('resumes')
-            .remove([existingResume.file_path]);
-
-          if (deleteStorageError) {
-            console.error('Error deleting old file:', deleteStorageError);
-          }
-        }
-
-        // Delete the old resume record from the database
-        const { error: deleteDbError } = await supabase
-          .from('resumes')
-          .delete()
-          .eq('id', currentResume.id);
-
-        if (deleteDbError) {
-          console.error('Error deleting old resume record:', deleteDbError);
+          .remove([currentResume.file_path]);
+        
+        if (deleteError) {
+          console.error('Error deleting old file:', deleteError);
         }
       }
 
       // Upload new file
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
-
       const { error: uploadError } = await supabase.storage
         .from('resumes')
         .upload(filePath, file);
@@ -145,24 +127,26 @@ const ResumeUpload = () => {
         throw uploadError;
       }
 
-      // Insert new resume record
-      const { error: dbError } = await supabase
+      // Upsert resume record
+      const { error: upsertError } = await supabase
         .from('resumes')
-        .insert({
+        .upsert({
           user_id: user.id,
           file_name: file.name,
           file_path: filePath,
           content_type: file.type,
           status: 'pending',
           created_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
         });
 
-      if (dbError) {
-        // If insert fails, clean up the uploaded file
+      if (upsertError) {
+        // If upsert fails, clean up the uploaded file
         await supabase.storage
           .from('resumes')
           .remove([filePath]);
-        throw dbError;
+        throw upsertError;
       }
 
       toast({
