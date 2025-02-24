@@ -37,35 +37,36 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
     : cleanDescription;
 
   return (
-    <div className="bg-white p-6 rounded-lg border border-gray-100 h-full flex flex-col justify-between transition-all duration-200 hover:shadow-lg hover:border-gray-200">
+    <div className="group bg-white p-6 rounded-xl border border-gray-200/60 h-full flex flex-col justify-between transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 hover:bg-gray-50/50">
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="inline-block px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full">
+        <div className="flex items-center justify-between">
+          <span className="inline-block px-3 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full">
             {Math.round(job.matchScore)}% Match
           </span>
-          <span className={cn("text-xs font-medium capitalize", sourceColor)}>
+          <span className={cn("text-xs font-medium capitalize px-2 py-1 rounded-full bg-gray-50", sourceColor)}>
             via {job.source}
           </span>
         </div>
         
-        <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
-          {job.title}
-        </h3>
+        <div className="space-y-1">
+          <h3 className="text-lg font-semibold text-gray-900 group-hover:text-primary transition-colors duration-200">
+            {job.title}
+          </h3>
+          <p className="text-sm font-medium text-muted-foreground">
+            {job.company}
+          </p>
+        </div>
         
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
-            <Building2 className="h-4 w-4 flex-shrink-0" />
-            <span className="truncate">{job.company}</span>
-          </p>
-          <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
-            <MapPin className="h-4 w-4 flex-shrink-0" />
-            <span className="truncate">{job.location}</span>
-          </p>
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <MapPin className="h-4 w-4 text-gray-400" />
+            {job.location}
+          </span>
           {job.salaryRange && (
-            <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
-              <DollarSign className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{job.salaryRange}</span>
-            </p>
+            <span className="flex items-center gap-1">
+              <DollarSign className="h-4 w-4 text-gray-400" />
+              {job.salaryRange}
+            </span>
           )}
         </div>
         
@@ -80,7 +81,7 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
             {job.requirements.slice(0, 3).map((req, index) => (
               <span 
                 key={index}
-                className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full truncate max-w-[150px]"
+                className="text-xs px-2.5 py-1 rounded-full border border-gray-100 bg-gray-50/50 text-gray-600 hover:bg-gray-100 transition-colors duration-200"
               >
                 {req}
               </span>
@@ -97,12 +98,10 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
           <Button
             onClick={onClick}
             size="sm"
-            className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm transition-all duration-200 hover:shadow-md hover:translate-y-[-1px]"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm transition-all duration-200 hover:shadow-md hover:translate-y-[-1px] hover:ring-2 hover:ring-emerald-500/20"
           >
-            <span className="inline-flex items-center gap-1">
-              Apply Now
-              <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-            </span>
+            Apply Now
+            <ArrowUpRight className="h-4 w-4 ml-1 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Button>
         </div>
       </div>

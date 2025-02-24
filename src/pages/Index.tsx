@@ -9,10 +9,17 @@ import { useAuth } from "@/components/AuthProvider";
 const Index = () => {
   const { user } = useAuth();
 
+  const handleGetStarted = () => {
+    const authSection = document.getElementById('auth');
+    if (authSection) {
+      authSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="min-h-screen">
       <Header />
-      <Hero />
+      <Hero onGetStarted={handleGetStarted} />
       
       <main className="container mx-auto px-4 py-32 space-y-32">
         {!user ? (
