@@ -3,40 +3,16 @@ import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
-import { User2 } from "lucide-react";
+import { User2, Briefcase } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Auth from "./Auth";
 
 const Logo = () => (
-  <svg
-    width="32"
-    height="32"
-    viewBox="0 0 48 48"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className="mr-3"
-  >
-    <rect width="48" height="48" rx="12" fill="#4ECCA3" fillOpacity="0.1" />
-    <path
-      d="M14 28a8 8 0 0116 0v4H14v-4z"
-      stroke="#4ECCA3"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    />
-    <path
-      d="M22 25a4 4 0 100-8 4 4 0 000 8z"
-      stroke="#4ECCA3"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    />
-    <path
-      d="M34 28.4c-2.8 4.2-7.1 7-12 7-4.9 0-9.2-2.8-12-7"
-      stroke="#4ECCA3"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    />
-  </svg>
+  <div className="flex items-center gap-2 text-primary">
+    <Briefcase className="w-8 h-8" />
+    <span className="text-2xl font-bold">CareerSync</span>
+  </div>
 );
 
 const Header = () => {
@@ -58,16 +34,16 @@ const Header = () => {
   };
 
   return (
-    <header className="border-b bg-white/50 backdrop-blur-sm sticky top-0 z-50">
-      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <div className="flex items-center">
+    <header className="bg-white/80 backdrop-blur-lg border-b sticky top-0 z-50">
+      <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+        <a href="/" className="hover:opacity-90 transition-opacity">
           <Logo />
-          <h1 className="text-2xl font-bold text-primary">Job Matcher</h1>
-        </div>
+        </a>
+        
         {user ? (
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <User2 className="w-4 h-4 text-muted-foreground" />
+            <div className="flex items-center gap-2 bg-secondary/50 px-4 py-2 rounded-full">
+              <User2 className="w-4 h-4 text-primary" />
               <span className="text-sm font-medium">
                 {user.user_metadata?.full_name || user.email?.split('@')[0]}
               </span>
@@ -75,7 +51,7 @@ const Header = () => {
             <Button 
               variant="outline" 
               onClick={handleSignOut}
-              className="hover:bg-destructive hover:text-destructive-foreground"
+              className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
             >
               Sign Out
             </Button>
@@ -84,7 +60,7 @@ const Header = () => {
           <Button 
             variant="default" 
             onClick={() => setShowAuthDialog(true)}
-            className="bg-primary hover:bg-primary/90"
+            className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all"
           >
             Sign In
           </Button>
@@ -104,3 +80,4 @@ const Header = () => {
 };
 
 export default Header;
+

@@ -32,24 +32,28 @@ const Index = () => {
       <Header />
       <Hero onGetStarted={handleGetStarted} />
       
-      <main className="container mx-auto px-4 py-16 space-y-16">
+      <main className="container mx-auto px-4 py-16 space-y-24">
         <section id="resume" className="scroll-mt-16 max-w-2xl mx-auto animate-fade-in">
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-bold mb-2">Your Resume</h2>
-            <p className="text-sm text-muted-foreground">
-              Upload your resume to get personalized job matches
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
+              Upload Your Resume
+            </h2>
+            <p className="text-base text-muted-foreground max-w-md mx-auto">
+              Let our AI-powered system match you with the perfect opportunities
             </p>
           </div>
-          <div className="bg-gradient-to-b from-secondary/80 to-secondary/20 rounded-xl p-6 backdrop-blur-sm border border-secondary shadow-lg">
+          <div className="bg-gradient-to-b from-white to-secondary/20 rounded-2xl p-8 backdrop-blur-sm border border-secondary/80 shadow-xl shadow-primary/5">
             <ResumeUpload onLoginRequired={handleLoginPrompt} />
           </div>
         </section>
 
         <section id="jobs" className="scroll-mt-16 animate-fade-in">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold mb-2">Available Jobs</h2>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              {user ? 'Matches based on your profile' : 'Latest opportunities'}
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
+              Available Opportunities
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-lg mx-auto">
+              {user ? 'Personalized job matches based on your profile' : 'Explore our curated job listings'}
             </p>
           </div>
           <JobList onLoginRequired={() => setShowAuthDialog(true)} />
@@ -73,3 +77,4 @@ const Index = () => {
 };
 
 export default Index;
+
