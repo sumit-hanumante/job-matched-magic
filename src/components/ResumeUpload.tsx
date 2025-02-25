@@ -148,20 +148,25 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         formData.append('file', file);
 
         try {
-          const response = await fetch('/api/parse-resume', {
-            method: 'POST',
-            body: formData
-          });
+          const { error: uploadError, data } = await supabase.storage
+            .from('temp-resumes')
+            .upload(`${crypto.randomUUID()}`, file);
 
-          if (!response.ok) {
-            throw new Error(`Failed to parse resume: ${response.statusText}`);
-          }
+          if (uploadError) throw uploadError;
 
-          const data = await response.json();
-          console.log('Resume parsed successfully:', data);
+          const { data: { publicUrl } } = supabase.storage
+            .from('temp-resumes')
+            .getPublicUrl(data.path);
+
+          const { data: parseData, error } = await supabase.functions
+            .invoke('parse-resume', {
+              body: { resumeUrl: publicUrl }
+            });
+
+          if (error) throw error;
 
           if (onLoginRequired) {
-            onLoginRequired(data.email, data.fullName);
+            onLoginRequired(parseData.email, parseData.fullName);
           }
 
           setFile(null);
@@ -193,7 +198,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       console.log('Uploading file to storage:', filePath);
 
       // Upload file to storage
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError, data: fileData } = await supabase.storage
         .from('resumes')
         .upload(filePath, file);
 
@@ -205,7 +210,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       console.log('File uploaded successfully, creating database record...');
 
       // Create database record
-      const { error: insertError } = await supabase
+      const { error: insertError, data: resumeData } = await supabase
         .from('resumes')
         .insert({
           user_id: user.id,
@@ -215,7 +220,9 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           status: 'pending',
           order_index: 1,
           created_at: new Date().toISOString()
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) {
         console.error('Database insert error:', insertError);
@@ -224,6 +231,26 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           .from('resumes')
           .remove([filePath]);
         throw insertError;
+      }
+
+      // Get public URL for the uploaded file
+      const { data: { publicUrl } } = supabase.storage
+        .from('resumes')
+        .getPublicUrl(filePath);
+
+      // Parse the resume
+      const { error: parseError } = await supabase.functions
+        .invoke('parse-resume', {
+          body: { 
+            resumeUrl: publicUrl,
+            userId: user.id,
+            resumeId: resumeData.id
+          }
+        });
+
+      if (parseError) {
+        console.error('Parse error:', parseError);
+        throw parseError;
       }
 
       console.log('Resume upload completed successfully');

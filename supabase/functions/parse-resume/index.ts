@@ -65,7 +65,6 @@ serve(async (req) => {
       - Languages known
       - Certifications
       - Preferred work type (remote/hybrid/onsite) if mentioned
-      - Any salary expectations mentioned
 
       Also analyze:
       - The type of companies they've worked for (startups, MNCs, etc.)
@@ -123,81 +122,6 @@ serve(async (req) => {
       .eq('id', resumeId);
 
     if (updateError) throw updateError;
-
-    // Generate initial job matches
-    console.log('Generating initial job matches...');
-    const { data: jobs, error: jobsError } = await supabase
-      .from('jobs')
-      .select('*')
-      .order('posted_date', { ascending: false });
-
-    if (jobsError) throw jobsError;
-
-    // Calculate match scores for each job
-    const matchPromises = jobs.map(async (job) => {
-      const scores = {
-        skill_match_score: 0,
-        location_match_score: 0,
-        company_match_score: 0,
-        salary_match_score: 0
-      };
-
-      // Calculate skill match score
-      scores.skill_match_score = parsedData.skills.reduce((score, skill) => {
-        const skillLower = skill.toLowerCase();
-        if (job.title.toLowerCase().includes(skillLower) ||
-            job.description.toLowerCase().includes(skillLower) ||
-            (job.requirements || []).some(req => req.toLowerCase().includes(skillLower))) {
-          return score + 1;
-        }
-        return score;
-      }, 0) / parsedData.skills.length;
-
-      // Calculate location match score
-      scores.location_match_score = parsedData.preferredLocations.some(loc =>
-        job.location.toLowerCase().includes(loc.toLowerCase())
-      ) ? 1 : 0;
-
-      // Calculate company match score
-      scores.company_match_score = parsedData.preferredCompanies.some(comp =>
-        job.company.toLowerCase().includes(comp.toLowerCase())
-      ) ? 1 : 0;
-
-      // Calculate salary match score
-      if (minSalary && job.salary_range) {
-        const jobSalaryMatch = job.salary_range.match(/\d+/g);
-        if (jobSalaryMatch) {
-          const jobMinSalary = parseInt(jobSalaryMatch[0]) * 1000;
-          scores.salary_match_score = jobMinSalary >= minSalary ? 1 : 
-            jobMinSalary / minSalary;
-        }
-      }
-
-      // Calculate overall match score
-      const matchScore = Math.round(
-        (scores.skill_match_score * 0.4 +
-        scores.location_match_score * 0.25 +
-        scores.company_match_score * 0.2 +
-        scores.salary_match_score * 0.15) * 100
-      );
-
-      return {
-        user_id: userId,
-        job_id: job.id,
-        match_score: matchScore,
-        ...scores,
-        is_shown: false
-      };
-    });
-
-    const jobMatches = await Promise.all(matchPromises);
-
-    // Insert job matches
-    const { error: matchError } = await supabase
-      .from('job_matches')
-      .insert(jobMatches);
-
-    if (matchError) throw matchError;
 
     return new Response(
       JSON.stringify({ 
