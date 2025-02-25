@@ -1,3 +1,4 @@
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 
@@ -26,6 +27,16 @@ export const JobFilters = ({
   const handleSourceChange = (value: string) => {
     console.log('Source change clicked:', value);
     onSourceChange(value);
+  };
+
+  const handleRefreshClick = () => {
+    console.log('Refresh clicked');
+    onRefresh();
+  };
+
+  const handleFetchJobsClick = () => {
+    console.log('Fetch jobs clicked');
+    onFetchJobs();
   };
 
   return (
@@ -68,7 +79,7 @@ export const JobFilters = ({
       </Select>
 
       <Button 
-        onClick={onRefresh}
+        onClick={handleRefreshClick}
         variant="outline"
         className="whitespace-nowrap bg-white"
       >
@@ -76,7 +87,7 @@ export const JobFilters = ({
       </Button>
 
       <Button 
-        onClick={onFetchJobs}
+        onClick={handleFetchJobsClick}
         disabled={isScrapingJobs}
         className="whitespace-nowrap bg-primary text-white"
       >

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -149,6 +150,7 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     }
   }, [selectedJobType, isAdmin, fetchJobs]);
 
+  // Initial load
   useEffect(() => {
     if (propJobs) {
       setJobs(propJobs);
@@ -158,6 +160,7 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     }
   }, [propJobs, fetchJobs]);
 
+  // Fetch jobs when source changes
   useEffect(() => {
     if (!propJobs) {
       fetchJobs();
