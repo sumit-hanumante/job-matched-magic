@@ -24,38 +24,73 @@ export const JobFilters = ({
   onFetchJobs,
   isScrapingJobs
 }: JobFiltersProps) => {
+  const handleSourceChange = (value: string) => {
+    console.log("Source changed to:", value);
+    onSourceChange(value);
+  };
+
+  const handleJobTypeChange = (value: string) => {
+    console.log("Job type changed to:", value);
+    onJobTypeChange(value);
+  };
+
+  const handleRefreshClick = () => {
+    console.log("Refresh clicked");
+    onRefresh();
+  };
+
+  const handleFetchJobsClick = () => {
+    console.log("Fetch jobs clicked");
+    onFetchJobs();
+  };
+
   return (
     <div className="flex flex-col sm:flex-row gap-2">
-      <Select value={selectedSource} onValueChange={onSourceChange}>
-        <SelectTrigger className="w-[180px]">
+      <Select 
+        defaultValue={selectedSource} 
+        onValueChange={handleSourceChange}
+      >
+        <SelectTrigger className="w-[180px] bg-white">
           <SelectValue placeholder="Select source" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Sources</SelectItem>
           {LEGAL_SOURCES.map(source => (
-            <SelectItem key={source} value={source}>{source}</SelectItem>
+            <SelectItem key={source} value={source}>
+              {source}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
-      <Select value={selectedJobType} onValueChange={onJobTypeChange}>
-        <SelectTrigger className="w-[180px]">
+
+      <Select 
+        defaultValue={selectedJobType} 
+        onValueChange={handleJobTypeChange}
+      >
+        <SelectTrigger className="w-[180px] bg-white">
           <SelectValue placeholder="Select job type" />
         </SelectTrigger>
         <SelectContent>
           {JOB_TYPES.map(type => (
-            <SelectItem key={type} value={type}>{type}</SelectItem>
+            <SelectItem key={type} value={type}>
+              {type}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
+
       <Button 
-        onClick={onRefresh}
+        onClick={handleRefreshClick}
         variant="outline"
+        className="whitespace-nowrap"
       >
         Refresh Jobs
       </Button>
+
       <Button 
-        onClick={onFetchJobs}
+        onClick={handleFetchJobsClick}
         disabled={isScrapingJobs}
+        className="whitespace-nowrap"
       >
         {isScrapingJobs ? "Fetching..." : "Fetch New Jobs"}
       </Button>

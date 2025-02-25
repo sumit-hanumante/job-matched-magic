@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
 import { useAuth } from "@/components/AuthProvider";
@@ -47,6 +46,62 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     window.open(job.applyUrl, '_blank');
   };
 
+  const fetchJobs = useCallback(async () => {
+    console.log("Fetching jobs with source:", selectedSource);
+    setIsLoading(true);
+    try {
+      if (isAdmin) {
+        const { data: allJobs } = await supabase
+          .from('jobs')
+          .select('*');
+
+        if (allJobs) {
+          const sourceCounts = allJobs.reduce<Record<string, number>>((acc, job) => {
+            acc[job.source] = (acc[job.source] || 0) + 1;
+            return acc;
+          }, {});
+
+          setUniqueSources(Object.entries(sourceCounts).map(([source, count]) => ({
+            source,
+            count
+          })));
+        }
+      }
+
+      let query = supabase.from('jobs').select('*');
+      
+      if (isAdmin && selectedSource !== 'all') {
+        query = query.eq('source', selectedSource);
+      }
+
+      const { data: jobsData, error } = await query
+        .order('posted_date', { ascending: false })
+        .limit(isAdmin ? undefined : INITIAL_JOB_LIMIT);
+
+      if (error) throw error;
+
+      const transformedJobs = jobsData?.map(job => ({
+        ...job,
+        matchScore: 0,
+        postedDate: new Date(job.posted_date).toISOString().split('T')[0],
+        applyUrl: job.apply_url,
+        salaryRange: job.salary_range,
+        lastScrapedAt: job.last_scraped_at
+      })) || [];
+
+      setJobs(transformedJobs);
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch jobs.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedSource, isAdmin]);
+
   const scrapeJobs = async () => {
     if (!isAdmin) return;
     
@@ -81,63 +136,6 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     }
   };
 
-  const fetchJobs = async () => {
-    setIsLoading(true);
-    try {
-      // First, get source counts for admin view
-      if (isAdmin) {
-        const { data: allJobs } = await supabase
-          .from('jobs')
-          .select('*');
-
-        if (allJobs) {
-          const sourceCounts = allJobs.reduce<Record<string, number>>((acc, job) => {
-            acc[job.source] = (acc[job.source] || 0) + 1;
-            return acc;
-          }, {});
-
-          setUniqueSources(Object.entries(sourceCounts).map(([source, count]) => ({
-            source,
-            count
-          })));
-        }
-      }
-
-      // Then get filtered jobs
-      let query = supabase.from('jobs').select('*');
-      
-      if (isAdmin && selectedSource !== 'all') {
-        query = query.eq('source', selectedSource);
-      }
-
-      const { data: jobsData, error } = await query
-        .order('posted_date', { ascending: false })
-        .limit(isAdmin ? undefined : INITIAL_JOB_LIMIT);
-
-      if (error) throw error;
-
-      const transformedJobs = jobsData?.map(job => ({
-        ...job,
-        matchScore: 0,
-        postedDate: new Date(job.posted_date).toISOString().split('T')[0],
-        applyUrl: job.apply_url,
-        salaryRange: job.salary_range,
-        lastScrapedAt: job.last_scraped_at
-      })) || [];
-
-      setJobs(transformedJobs);
-    } catch (error) {
-      console.error('Error fetching jobs:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch jobs.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (propJobs) {
       setJobs(propJobs);
@@ -145,7 +143,7 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     } else {
       fetchJobs();
     }
-  }, [propJobs, selectedSource]);
+  }, [propJobs, fetchJobs]);
 
   if (isLoading) {
     return (
