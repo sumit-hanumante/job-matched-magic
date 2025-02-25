@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -7,7 +6,11 @@ import ResumeDisplay from "./resume/ResumeDisplay";
 import ResumeDropzone from "./resume/ResumeDropzone";
 import ResumeUploadForm from "./resume/ResumeUploadForm";
 
-const ResumeUpload = () => {
+interface ResumeUploadProps {
+  onLoginRequired?: () => void;
+}
+
+const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -83,10 +86,13 @@ const ResumeUpload = () => {
     }
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       if (selectedFile.type === "application/pdf" || selectedFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+        if (!user && onLoginRequired) {
+          onLoginRequired();
+        }
         setFile(selectedFile);
       } else {
         toast({
@@ -99,7 +105,14 @@ const ResumeUpload = () => {
   };
 
   const uploadResume = async () => {
-    if (!file || !user) return;
+    if (!file) return;
+    
+    if (!user) {
+      if (onLoginRequired) {
+        onLoginRequired();
+      }
+      return;
+    }
 
     setIsUploading(true);
     const fileExt = file.name.split('.').pop();
@@ -204,7 +217,7 @@ const ResumeUpload = () => {
         onDrop={handleDrop}
         onFileSelect={handleFileInput}
         hasExistingResume={!!currentResume}
-        isAuthenticated={true}
+        isAuthenticated={!!user}
       />
 
       {file && (

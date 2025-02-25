@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -12,6 +11,7 @@ import { JobListHeader } from "./JobListHeader";
 
 interface JobListProps {
   jobs?: Job[];
+  onLoginRequired?: () => void;
 }
 
 interface SourceCount {
@@ -21,7 +21,7 @@ interface SourceCount {
 
 const INITIAL_JOB_LIMIT = 20;
 
-const JobList = ({ jobs: propJobs }: JobListProps) => {
+const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isScrapingJobs, setIsScrapingJobs] = useState(false);
@@ -34,12 +34,10 @@ const JobList = ({ jobs: propJobs }: JobListProps) => {
 
   const handleJobClick = (job: Job) => {
     if (!user) {
-      localStorage.setItem('lastViewedJob', job.id);
-      toast({
-        title: "Sign in required",
-        description: "Please sign in or create an account to view job details",
-      });
-      navigate('/auth');
+      if (onLoginRequired) {
+        onLoginRequired();
+        localStorage.setItem('lastViewedJob', job.id);
+      }
       return;
     }
     window.open(job.applyUrl, '_blank');
