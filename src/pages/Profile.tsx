@@ -40,15 +40,35 @@ const Profile = () => {
           .from('user_preferences')
           .select('*')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
-        setPreferences(data);
+        
+        // If no preferences exist, create default ones
+        if (!data) {
+          const defaultPreferences: Partial<UserPreferences> = {
+            job_alerts: true,
+            preferred_job_types: ['software_development'],
+            preferred_locations: ['remote'],
+            job_search_status: 'actively_looking'
+          };
+
+          const { data: newData, error: insertError } = await supabase
+            .from('user_preferences')
+            .insert([{ id: user.id, ...defaultPreferences }])
+            .select()
+            .single();
+
+          if (insertError) throw insertError;
+          setPreferences(newData);
+        } else {
+          setPreferences(data);
+        }
       } catch (error) {
         console.error('Error fetching preferences:', error);
         toast({
           title: "Error",
-          description: "Failed to load profile data",
+          description: "Failed to load profile data. Please try again.",
           variant: "destructive",
         });
       } finally {
@@ -60,11 +80,13 @@ const Profile = () => {
   }, [user, navigate]);
 
   const updatePreferences = async (updates: Partial<UserPreferences>) => {
+    if (!user?.id) return;
+
     try {
       const { error } = await supabase
         .from('user_preferences')
         .update(updates)
-        .eq('id', user?.id);
+        .eq('id', user.id);
 
       if (error) throw error;
 
@@ -83,8 +105,19 @@ const Profile = () => {
     }
   };
 
-  if (!user || isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  if (!user) {
+    return null;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your profile...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -98,16 +131,16 @@ const Profile = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="preferences">
+        <Tabs defaultValue="job_preferences">
           <TabsList className="mb-6">
-            <TabsTrigger value="preferences">Preferences</TabsTrigger>
-            <TabsTrigger value="professional">Professional</TabsTrigger>
+            <TabsTrigger value="job_preferences">Job Preferences</TabsTrigger>
+            <TabsTrigger value="profile_links">Profile Links</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="preferences">
+          <TabsContent value="job_preferences">
             <Card>
               <CardHeader>
-                <CardTitle>Job Preferences</CardTitle>
+                <CardTitle>Job Search Settings</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
@@ -122,41 +155,46 @@ const Profile = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="actively_looking">Actively Looking</SelectItem>
-                        <SelectItem value="open_to_offers">Open to Offers</SelectItem>
+                        <SelectItem value="open_to_offers">Open to Opportunities</SelectItem>
                         <SelectItem value="not_looking">Not Looking</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label>Preferred Job Types</Label>
+                    <Label>Field of Work</Label>
                     <Select
                       value={preferences?.preferred_job_types?.[0]}
                       onValueChange={(value) => updatePreferences({ preferred_job_types: [value] })}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select job type" />
+                        <SelectValue placeholder="Select field" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="software developer">Software Developer</SelectItem>
-                        <SelectItem value="medical coding">Medical Coding</SelectItem>
+                        <SelectItem value="software_development">Software Development</SelectItem>
+                        <SelectItem value="data_science">Data Science</SelectItem>
+                        <SelectItem value="devops">DevOps</SelectItem>
+                        <SelectItem value="product_management">Product Management</SelectItem>
+                        <SelectItem value="ui_ux_design">UI/UX Design</SelectItem>
+                        <SelectItem value="qa_testing">QA & Testing</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label>Preferred Location</Label>
+                    <Label>Work Location Preference</Label>
                     <Select
                       value={preferences?.preferred_locations?.[0]}
                       onValueChange={(value) => updatePreferences({ preferred_locations: [value] })}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select location" />
+                        <SelectValue placeholder="Select preference" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="remote">Remote</SelectItem>
-                        <SelectItem value="hybrid">Hybrid</SelectItem>
+                        <SelectItem value="remote">Remote Only</SelectItem>
+                        <SelectItem value="hybrid">Hybrid (2-3 days office)</SelectItem>
                         <SelectItem value="onsite">Onsite</SelectItem>
+                        <SelectItem value="flexible">Flexible</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -165,10 +203,10 @@ const Profile = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="professional">
+          <TabsContent value="profile_links">
             <Card>
               <CardHeader>
-                <CardTitle>Professional Links</CardTitle>
+                <CardTitle>Professional Profiles</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
