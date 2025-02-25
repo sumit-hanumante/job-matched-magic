@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -36,6 +35,16 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   
   const isAdmin = user?.email === ADMIN_EMAIL;
 
+  const handleSourceChange = useCallback((source: string) => {
+    console.log('Source changed to:', source);
+    setSelectedSource(source);
+  }, []);
+
+  const handleJobTypeChange = useCallback((type: string) => {
+    console.log('Job type changed to:', type);
+    setSelectedJobType(type);
+  }, []);
+
   const handleJobClick = useCallback((job: Job) => {
     if (!user) {
       if (onLoginRequired) {
@@ -48,13 +57,12 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   }, [user, onLoginRequired]);
 
   const fetchJobs = useCallback(async () => {
-    console.log("Fetching jobs...");
+    console.log("Fetching jobs with source:", selectedSource);
     setIsLoading(true);
     
     try {
       let query = supabase.from('jobs').select('*');
       
-      // Apply source filter if not "all"
       if (selectedSource !== 'all') {
         query = query.eq('source', selectedSource);
       }
@@ -65,7 +73,6 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
 
       if (error) throw error;
 
-      // Transform job data
       const transformedJobs = jobsData?.map(job => ({
         ...job,
         matchScore: 0,
@@ -77,7 +84,6 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
 
       setJobs(transformedJobs);
       
-      // Update source counts for admin view
       if (isAdmin) {
         const sourceCounts = jobsData?.reduce<Record<string, number>>((acc, job) => {
           acc[job.source] = (acc[job.source] || 0) + 1;
@@ -128,7 +134,6 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
         description: "New jobs have been fetched successfully",
       });
       
-      // Refresh the job list after scraping
       await fetchJobs();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch new jobs';
@@ -152,6 +157,12 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
       fetchJobs();
     }
   }, [propJobs, fetchJobs]);
+
+  useEffect(() => {
+    if (!propJobs) {
+      fetchJobs();
+    }
+  }, [selectedSource, propJobs, fetchJobs]);
 
   if (isLoading) {
     return (
@@ -185,16 +196,10 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
             <JobFilters 
               selectedSource={selectedSource}
               selectedJobType={selectedJobType}
-              onSourceChange={setSelectedSource}
-              onJobTypeChange={setSelectedJobType}
-              onRefresh={() => {
-                console.log("Refresh button clicked");
-                fetchJobs();
-              }}
-              onFetchJobs={() => {
-                console.log("Fetch new jobs button clicked");
-                handleFetchNewJobs();
-              }}
+              onSourceChange={handleSourceChange}
+              onJobTypeChange={handleJobTypeChange}
+              onRefresh={fetchJobs}
+              onFetchJobs={handleFetchNewJobs}
               isScrapingJobs={isScrapingJobs}
             />
           </div>
