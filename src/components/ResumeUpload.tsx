@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +39,8 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         .from('resumes')
         .select('id, file_name, status, created_at, file_path')
         .eq('user_id', user.id)
+        .order('order_index', { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       if (error) {
@@ -93,6 +96,45 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
+  const updateResumeOrders = async (userId: string) => {
+    try {
+      // Get current resumes ordered by order_index
+      const { data: resumes, error: fetchError } = await supabase
+        .from('resumes')
+        .select('id')
+        .eq('user_id', userId)
+        .order('order_index', { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      // If we have more than 3 resumes, delete the oldest ones
+      if (resumes && resumes.length >= 3) {
+        const resumesToDelete = resumes.slice(2); // Get all resumes after the first 2
+        
+        for (const resume of resumesToDelete) {
+          const { error: deleteError } = await supabase
+            .from('resumes')
+            .delete()
+            .eq('id', resume.id);
+            
+          if (deleteError) throw deleteError;
+        }
+      }
+
+      // Update order_index for remaining resumes
+      const { error: updateError } = await supabase
+        .from('resumes')
+        .update({ order_index: 2 })
+        .eq('user_id', userId)
+        .eq('order_index', 1);
+
+      if (updateError) throw updateError;
+    } catch (error) {
+      console.error('Error updating resume orders:', error);
+      throw error;
+    }
+  };
+
   const uploadResume = async () => {
     if (!file) return;
 
@@ -109,6 +151,10 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         body: formData
       });
 
+      if (!response.ok) {
+        throw new Error(`Failed to parse resume: ${response.statusText}`);
+      }
+
       const data = await response.json();
 
       if (!user && onLoginRequired) {
@@ -121,7 +167,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
 
       if (!user) {
         toast({
-          title: "Resume uploaded successfully",
+          title: "Resume parsed successfully",
           description: "Create an account to save your resume and get personalized job matches.",
         });
         setFile(null);
@@ -134,16 +180,10 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      if (currentResume?.file_path) {
-        const { error: deleteError } = await supabase.storage
-          .from('resumes')
-          .remove([currentResume.file_path]);
-        
-        if (deleteError) {
-          console.error('Error deleting old file:', deleteError);
-        }
-      }
+      // Update order of existing resumes
+      await updateResumeOrders(user.id);
 
+      // Upload new file
       const { error: uploadError } = await supabase.storage
         .from('resumes')
         .upload(filePath, file);
@@ -152,24 +192,25 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         throw uploadError;
       }
 
-      const { error: upsertError } = await supabase
+      // Insert new resume with order_index 1 (most recent)
+      const { error: insertError } = await supabase
         .from('resumes')
-        .upsert({
+        .insert({
           user_id: user.id,
           file_name: file.name,
           file_path: filePath,
           content_type: file.type,
           status: 'pending',
+          order_index: 1,
           created_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
         });
 
-      if (upsertError) {
+      if (insertError) {
+        // Cleanup uploaded file if insert fails
         await supabase.storage
           .from('resumes')
           .remove([filePath]);
-        throw upsertError;
+        throw insertError;
       }
 
       toast({
