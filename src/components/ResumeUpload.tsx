@@ -140,59 +140,71 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
 
     try {
       setIsUploading(true);
-
-      // Create form data to send the file
-      const formData = new FormData();
-      formData.append('file', file);
-
-      // Call the resume parser API endpoint
-      const response = await fetch('/api/parse-resume', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to parse resume: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      if (!user && onLoginRequired) {
-        // Extract email and name from parsed resume data
-        const email = data.email;
-        const fullName = data.fullName;
-        onLoginRequired(email, fullName);
-        return;
-      }
+      console.log('Starting resume upload...');
 
       if (!user) {
-        toast({
-          title: "Resume parsed successfully",
-          description: "Create an account to save your resume and get personalized job matches.",
-        });
-        setFile(null);
-        const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
+        // For non-authenticated users, just parse the resume
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+          const response = await fetch('/api/parse-resume', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to parse resume: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          console.log('Resume parsed successfully:', data);
+
+          if (onLoginRequired) {
+            onLoginRequired(data.email, data.fullName);
+          }
+
+          setFile(null);
+          const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+          if (fileInput) fileInput.value = '';
+
+          toast({
+            title: "Resume parsed successfully",
+            description: "Create an account to save your resume and get personalized job matches.",
+          });
+        } catch (error) {
+          console.error('Error parsing resume:', error);
+          throw error;
+        }
         return;
       }
 
+      // For authenticated users, handle the full upload process
+      console.log('Authenticated user, proceeding with full upload...');
+
+      // Update order of existing resumes first
+      await updateResumeOrders(user.id);
+
+      // Prepare file upload
       const fileExt = file.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      // Update order of existing resumes
-      await updateResumeOrders(user.id);
+      console.log('Uploading file to storage:', filePath);
 
-      // Upload new file
+      // Upload file to storage
       const { error: uploadError } = await supabase.storage
         .from('resumes')
         .upload(filePath, file);
 
       if (uploadError) {
+        console.error('Storage upload error:', uploadError);
         throw uploadError;
       }
 
-      // Insert new resume with order_index 1 (most recent)
+      console.log('File uploaded successfully, creating database record...');
+
+      // Create database record
       const { error: insertError } = await supabase
         .from('resumes')
         .insert({
@@ -206,12 +218,15 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         });
 
       if (insertError) {
+        console.error('Database insert error:', insertError);
         // Cleanup uploaded file if insert fails
         await supabase.storage
           .from('resumes')
           .remove([filePath]);
         throw insertError;
       }
+
+      console.log('Resume upload completed successfully');
 
       toast({
         title: "Resume uploaded successfully",

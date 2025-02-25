@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 import { User2 } from "lucide-react";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import Auth from "./Auth";
 
 const Logo = () => (
   <svg
@@ -39,6 +42,7 @@ const Logo = () => (
 const Header = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -76,7 +80,24 @@ const Header = () => {
               Sign Out
             </Button>
           </div>
-        ) : null}
+        ) : (
+          <Button 
+            variant="default" 
+            onClick={() => setShowAuthDialog(true)}
+            className="bg-primary hover:bg-primary/90"
+          >
+            Sign In
+          </Button>
+        )}
+
+        <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Sign in to continue</DialogTitle>
+            </DialogHeader>
+            <Auth onSuccess={() => setShowAuthDialog(false)} />
+          </DialogContent>
+        </Dialog>
       </div>
     </header>
   );
