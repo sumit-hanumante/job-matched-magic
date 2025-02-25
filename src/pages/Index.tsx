@@ -3,7 +3,6 @@ import Hero from "@/components/Hero";
 import ResumeUpload from "@/components/ResumeUpload";
 import JobList from "@/components/JobList";
 import Auth from "@/components/Auth";
-import Header from "@/components/Header";
 import { useAuth } from "@/components/AuthProvider";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -29,7 +28,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen">
-      <Header />
       <Hero onGetStarted={handleGetStarted} />
       
       <main className="container mx-auto px-4 py-16 space-y-24">
@@ -77,4 +75,3 @@ const Index = () => {
 };
 
 export default Index;
-
