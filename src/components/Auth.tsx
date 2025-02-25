@@ -7,7 +7,11 @@ import { useToast } from '@/components/ui/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 
-const Auth = () => {
+interface AuthProps {
+  onSuccess?: () => void;
+}
+
+const Auth = ({ onSuccess }: AuthProps) => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,6 +63,10 @@ const Auth = () => {
         title: "Check your email",
         description: "We've sent you a confirmation email.",
       });
+      
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (error) {
       toast({
         variant: "destructive",
@@ -90,6 +98,10 @@ const Auth = () => {
       });
 
       if (error) throw error;
+      
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (error) {
       toast({
         variant: "destructive",
