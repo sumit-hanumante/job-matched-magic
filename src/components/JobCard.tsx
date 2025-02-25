@@ -50,19 +50,19 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
   };
 
   return (
-    <div className="group bg-white p-6 rounded-xl border border-slate-200 h-full flex flex-col justify-between transition-all duration-300 hover:shadow-lg hover:border-slate-300">
+    <div className="group relative bg-white p-6 rounded-xl border border-slate-200 h-full flex flex-col justify-between transition-all duration-300 hover:shadow-md hover:border-slate-300">
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <span className="inline-block px-3 py-1 text-xs font-medium bg-slate-100 text-slate-800 rounded-full">
+          <span className="inline-flex items-center px-3 py-1 text-xs font-medium bg-slate-100 text-slate-800 rounded-full">
             {Math.round(job.matchScore || 0)}% Match
           </span>
-          <span className={cn("text-xs font-medium capitalize px-2 py-1 rounded-full bg-slate-50", sourceColor)}>
+          <span className={cn("text-xs font-medium capitalize inline-flex items-center px-2 py-1 rounded-full bg-slate-50", sourceColor)}>
             via {job.source}
           </span>
         </div>
         
-        <div className="space-y-1">
-          <h3 className="text-lg font-semibold text-slate-900 group-hover:text-slate-700 transition-colors duration-200">
+        <div className="space-y-1.5">
+          <h3 className="text-lg font-semibold text-slate-900">
             {job.title}
           </h3>
           <p className="text-sm font-medium text-slate-600">
@@ -72,13 +72,13 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
         
         <div className="flex items-center gap-4 text-sm text-slate-600">
           {job.location && (
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <MapPin className="h-4 w-4 text-slate-400" />
               {job.location}
             </span>
           )}
           {job.salaryRange && (
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <DollarSign className="h-4 w-4 text-slate-400" />
               {job.salaryRange}
             </span>
@@ -96,7 +96,7 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
             {job.requirements.slice(0, 3).map((req, index) => (
               <span 
                 key={index}
-                className="text-xs px-2.5 py-1 rounded-full border border-slate-100 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors duration-200"
+                className="text-xs px-2.5 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
               >
                 {req}
               </span>
@@ -114,7 +114,7 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
             onClick={handleClick}
             size="sm"
             variant="default"
-            className="bg-slate-900 hover:bg-slate-800 text-white shadow-sm transition-all duration-200 hover:shadow-md hover:translate-y-[-1px]"
+            className="bg-slate-900 hover:bg-slate-800 text-white shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
           >
             Apply Now
             <ArrowUpRight className="h-4 w-4 ml-1 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
