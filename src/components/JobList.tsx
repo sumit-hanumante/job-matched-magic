@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -35,7 +36,7 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   
   const isAdmin = user?.email === ADMIN_EMAIL;
 
-  const handleJobClick = (job: Job) => {
+  const handleJobClick = useCallback((job: Job) => {
     if (!user) {
       if (onLoginRequired) {
         onLoginRequired();
@@ -44,33 +45,17 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
       return;
     }
     window.open(job.applyUrl, '_blank');
-  };
+  }, [user, onLoginRequired]);
 
   const fetchJobs = useCallback(async () => {
-    console.log("Fetching jobs with source:", selectedSource);
+    console.log("Fetching jobs...");
     setIsLoading(true);
+    
     try {
-      if (isAdmin) {
-        const { data: allJobs } = await supabase
-          .from('jobs')
-          .select('*');
-
-        if (allJobs) {
-          const sourceCounts = allJobs.reduce<Record<string, number>>((acc, job) => {
-            acc[job.source] = (acc[job.source] || 0) + 1;
-            return acc;
-          }, {});
-
-          setUniqueSources(Object.entries(sourceCounts).map(([source, count]) => ({
-            source,
-            count
-          })));
-        }
-      }
-
       let query = supabase.from('jobs').select('*');
       
-      if (isAdmin && selectedSource !== 'all') {
+      // Apply source filter if not "all"
+      if (selectedSource !== 'all') {
         query = query.eq('source', selectedSource);
       }
 
@@ -80,6 +65,7 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
 
       if (error) throw error;
 
+      // Transform job data
       const transformedJobs = jobsData?.map(job => ({
         ...job,
         matchScore: 0,
@@ -90,6 +76,24 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
       })) || [];
 
       setJobs(transformedJobs);
+      
+      // Update source counts for admin view
+      if (isAdmin) {
+        const sourceCounts = jobsData?.reduce<Record<string, number>>((acc, job) => {
+          acc[job.source] = (acc[job.source] || 0) + 1;
+          return acc;
+        }, {}) || {};
+
+        setUniqueSources(Object.entries(sourceCounts).map(([source, count]) => ({
+          source,
+          count
+        })));
+      }
+
+      toast({
+        title: "Success",
+        description: "Jobs refreshed successfully",
+      });
     } catch (error) {
       console.error('Error fetching jobs:', error);
       toast({
@@ -102,12 +106,14 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     }
   }, [selectedSource, isAdmin]);
 
-  const scrapeJobs = async () => {
+  const handleFetchNewJobs = useCallback(async () => {
     if (!isAdmin) return;
     
     try {
       setIsScrapingJobs(true);
       setScrapingError(null);
+      
+      console.log("Fetching new jobs with type:", selectedJobType);
       
       const { data, error } = await supabase.functions.invoke('scrape-jobs', {
         body: { jobType: selectedJobType }
@@ -118,13 +124,15 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
       }
       
       toast({
-        title: "Jobs Updated",
-        description: data?.message || "New jobs have been fetched successfully",
+        title: "Success",
+        description: "New jobs have been fetched successfully",
       });
       
+      // Refresh the job list after scraping
       await fetchJobs();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch new jobs';
+      console.error('Error scraping jobs:', errorMessage);
       setScrapingError(errorMessage);
       toast({
         title: "Error",
@@ -134,7 +142,7 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     } finally {
       setIsScrapingJobs(false);
     }
-  };
+  }, [selectedJobType, isAdmin, fetchJobs]);
 
   useEffect(() => {
     if (propJobs) {
@@ -179,8 +187,14 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
               selectedJobType={selectedJobType}
               onSourceChange={setSelectedSource}
               onJobTypeChange={setSelectedJobType}
-              onRefresh={fetchJobs}
-              onFetchJobs={scrapeJobs}
+              onRefresh={() => {
+                console.log("Refresh button clicked");
+                fetchJobs();
+              }}
+              onFetchJobs={() => {
+                console.log("Fetch new jobs button clicked");
+                handleFetchNewJobs();
+              }}
               isScrapingJobs={isScrapingJobs}
             />
           </div>
