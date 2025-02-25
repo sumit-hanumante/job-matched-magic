@@ -39,11 +39,11 @@ const Hero = ({ onGetStarted }: HeroProps) => {
       <div ref={dotsRef} className="absolute inset-0 pointer-events-none" />
       
       <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
-        AI-Powered Job Matching
+        TalentMatch AI
       </h1>
       
       <p className="text-lg md:text-xl text-muted-foreground max-w-lg mb-8">
-        Upload once, get matched with relevant jobs instantly
+        Your AI-powered career compass. Upload your resume, discover your path.
       </p>
       
       <Button
@@ -51,7 +51,7 @@ const Hero = ({ onGetStarted }: HeroProps) => {
         size="lg"
         className="text-base px-8"
       >
-        Find Jobs Now
+        Explore Opportunities
         <ArrowDown className="h-4 w-4 ml-2" />
       </Button>
     </div>
