@@ -3,15 +3,15 @@ import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
-import { User2, Briefcase } from "lucide-react";
+import { User2, Search } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Auth from "./Auth";
 
 const Logo = () => (
-  <div className="flex items-center gap-2 text-primary">
-    <Briefcase className="w-8 h-8" />
-    <span className="text-2xl font-bold">CareerSync</span>
+  <div className="flex items-center gap-2">
+    <Search className="w-6 h-6 text-slate-800" />
+    <span className="text-xl font-bold text-slate-800">JobMatch</span>
   </div>
 );
 

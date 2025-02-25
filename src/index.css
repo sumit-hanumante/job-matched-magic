@@ -13,7 +13,7 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 158 76% 56%;
+    --primary: 215 25% 27%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -25,12 +25,12 @@
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 158 76% 56%;
+    --ring: 215 25% 27%;
     --radius: 0.75rem;
   }
 
   * {
-    @apply border-border selection:bg-primary/10 selection:text-primary;
+    @apply border-border selection:bg-slate-100 selection:text-slate-900;
   }
   
   body {
@@ -47,15 +47,15 @@
   .ai-grid {
     @apply fixed top-0 left-0 w-full h-full z-0;
     background-image: 
-      linear-gradient(to right, rgba(78, 204, 163, 0.03) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(78, 204, 163, 0.03) 1px, transparent 1px);
+      linear-gradient(to right, rgba(30, 41, 59, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(30, 41, 59, 0.03) 1px, transparent 1px);
     background-size: 40px 40px;
     mask-image: radial-gradient(circle at 50% 50%, black 0%, transparent 70%);
   }
 
   .ai-dots {
     @apply absolute w-1 h-1 rounded-full;
-    background: rgba(78, 204, 163, 0.15);
+    background: rgba(30, 41, 59, 0.15);
     animation: move-dot 3s linear infinite;
   }
 }
@@ -73,4 +73,3 @@
     opacity: 0;
   }
 }
-

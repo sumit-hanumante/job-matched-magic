@@ -1,5 +1,5 @@
 
-import { ArrowDown, Rocket, Target, Award } from "lucide-react";
+import { ArrowDown, Search, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef } from "react";
 
@@ -38,27 +38,37 @@ const Hero = ({ onGetStarted }: HeroProps) => {
       <div className="ai-grid" />
       <div ref={dotsRef} className="absolute inset-0 pointer-events-none" />
       
-      <div className="space-y-6 relative z-10 max-w-4xl mx-auto">
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary to-primary/70">
-          Your Career Journey Starts Here
+      <div className="space-y-8 relative z-10 max-w-4xl mx-auto">
+        <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 text-slate-800">
+          Find Your Next
+          <span className="block mt-2 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 bg-clip-text text-transparent">
+            Perfect Role
+          </span>
         </h1>
         
-        <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-8">
-          Discover opportunities that align with your skills and aspirations
+        <p className="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto mb-8">
+          Smart job matching across multiple platforms, all in one place
         </p>
 
         <div className="flex flex-wrap justify-center gap-12 mb-12">
-          <Feature icon={Target} title="Smart Matching" description="AI-powered job recommendations" />
-          <Feature icon={Rocket} title="Quick Apply" description="Streamlined application process" />
-          <Feature icon={Award} title="Top Companies" description="Access premium opportunities" />
+          <Feature 
+            icon={Search} 
+            title="Multi-Platform Search" 
+            description="Access jobs from multiple trusted sources" 
+          />
+          <Feature 
+            icon={Target} 
+            title="AI-Powered Matching" 
+            description="Personalized recommendations based on your profile" 
+          />
         </div>
         
         <Button
           onClick={onGetStarted}
           size="lg"
-          className="text-lg px-8 py-6 bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all"
+          className="text-lg px-8 py-6 bg-slate-900 hover:bg-slate-800 text-white shadow-xl shadow-slate-200 hover:shadow-slate-300 transition-all"
         >
-          Get Started
+          Start Your Search
           <ArrowDown className="h-5 w-5 ml-2" />
         </Button>
       </div>
@@ -68,13 +78,12 @@ const Hero = ({ onGetStarted }: HeroProps) => {
 
 const Feature = ({ icon: Icon, title, description }: { icon: any, title: string, description: string }) => (
   <div className="flex flex-col items-center gap-2">
-    <div className="p-3 rounded-full bg-primary/10 text-primary">
+    <div className="p-3 rounded-full bg-slate-100 text-slate-800">
       <Icon className="w-6 h-6" />
     </div>
-    <h3 className="font-semibold text-lg">{title}</h3>
-    <p className="text-sm text-muted-foreground">{description}</p>
+    <h3 className="font-semibold text-lg text-slate-800">{title}</h3>
+    <p className="text-sm text-slate-600">{description}</p>
   </div>
 );
 
 export default Hero;
-
