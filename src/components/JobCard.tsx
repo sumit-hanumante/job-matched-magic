@@ -41,9 +41,12 @@ const JobCard = ({ job, onClick }: JobCardProps) => {
     ? cleanDescription.slice(0, 200).trim() + '...'
     : cleanDescription;
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (onClick) onClick();
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else if (job.applyUrl) {
+      window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (
