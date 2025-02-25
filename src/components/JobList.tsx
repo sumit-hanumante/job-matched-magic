@@ -20,7 +20,7 @@ interface SourceCount {
 }
 
 const INITIAL_JOB_LIMIT = 10;
-const ADMIN_EMAIL = 'test@gmail.com'; // Fixed admin email
+const ADMIN_EMAIL = 'admin@jobmagic.com'; // Updated admin email
 
 const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
