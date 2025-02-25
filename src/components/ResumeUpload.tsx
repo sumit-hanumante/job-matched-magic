@@ -96,41 +96,37 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
-  const updateResumeOrders = async (userId: string) => {
+  const shiftResumes = async (userId: string) => {
     try {
       // Get current resumes ordered by order_index
       const { data: resumes, error: fetchError } = await supabase
         .from('resumes')
-        .select('id')
+        .select('id, order_index')
         .eq('user_id', userId)
         .order('order_index', { ascending: true });
 
       if (fetchError) throw fetchError;
 
-      // If we have more than 3 resumes, delete the oldest ones
-      if (resumes && resumes.length >= 3) {
-        const resumesToDelete = resumes.slice(2); // Get all resumes after the first 2
-        
-        for (const resume of resumesToDelete) {
-          const { error: deleteError } = await supabase
-            .from('resumes')
-            .delete()
-            .eq('id', resume.id);
-            
-          if (deleteError) throw deleteError;
+      if (resumes) {
+        // Shift existing resumes
+        for (const resume of resumes) {
+          const newIndex = resume.order_index + 1;
+          if (newIndex <= 3) {
+            await supabase
+              .from('resumes')
+              .update({ order_index: newIndex })
+              .eq('id', resume.id);
+          } else {
+            // Delete resumes beyond the 3rd position
+            await supabase
+              .from('resumes')
+              .delete()
+              .eq('id', resume.id);
+          }
         }
       }
-
-      // Update order_index for remaining resumes
-      const { error: updateError } = await supabase
-        .from('resumes')
-        .update({ order_index: 2 })
-        .eq('user_id', userId)
-        .eq('order_index', 1);
-
-      if (updateError) throw updateError;
     } catch (error) {
-      console.error('Error updating resume orders:', error);
+      console.error('Error shifting resumes:', error);
       throw error;
     }
   };
@@ -143,73 +139,53 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       console.log('Starting resume upload...');
 
       if (!user) {
-        // For non-authenticated users, just parse the resume
-        const formData = new FormData();
-        formData.append('file', file);
+        // For non-authenticated users, upload to temp storage
+        const tempFileName = `${crypto.randomUUID()}-${file.name}`;
+        const { error: uploadError, data } = await supabase.storage
+          .from('temp-resumes')
+          .upload(tempFileName, file);
 
-        try {
-          const { error: uploadError, data } = await supabase.storage
-            .from('temp-resumes')
-            .upload(`${crypto.randomUUID()}`, file);
+        if (uploadError) throw uploadError;
 
-          if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage
+          .from('temp-resumes')
+          .getPublicUrl(data.path);
 
-          const { data: { publicUrl } } = supabase.storage
-            .from('temp-resumes')
-            .getPublicUrl(data.path);
-
-          const { data: parseData, error } = await supabase.functions
-            .invoke('parse-resume', {
-              body: { resumeUrl: publicUrl }
-            });
-
-          if (error) throw error;
-
-          if (onLoginRequired) {
-            onLoginRequired(parseData.email, parseData.fullName);
-          }
-
-          setFile(null);
-          const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-          if (fileInput) fileInput.value = '';
-
-          toast({
-            title: "Resume parsed successfully",
-            description: "Create an account to save your resume and get personalized job matches.",
-          });
-        } catch (error) {
-          console.error('Error parsing resume:', error);
-          throw error;
+        // Trigger login flow with success message
+        if (onLoginRequired) {
+          onLoginRequired();
         }
+
+        toast({
+          title: "File uploaded successfully",
+          description: "Please create an account to analyze your resume and get job matches.",
+        });
+
+        setFile(null);
+        const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+
         return;
       }
 
-      // For authenticated users, handle the full upload process
-      console.log('Authenticated user, proceeding with full upload...');
+      // For authenticated users
+      console.log('Authenticated user, proceeding with upload...');
 
-      // Update order of existing resumes first
-      await updateResumeOrders(user.id);
+      // Step 1: Shift existing resumes
+      await shiftResumes(user.id);
 
-      // Prepare file upload
+      // Step 2: Upload new file
       const fileExt = file.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      console.log('Uploading file to storage:', filePath);
-
-      // Upload file to storage
-      const { error: uploadError, data: fileData } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('resumes')
         .upload(filePath, file);
 
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError);
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
-      console.log('File uploaded successfully, creating database record...');
-
-      // Create database record
+      // Step 3: Create resume record
       const { error: insertError, data: resumeData } = await supabase
         .from('resumes')
         .insert({
@@ -217,15 +193,13 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           file_name: file.name,
           file_path: filePath,
           content_type: file.type,
-          status: 'pending',
-          order_index: 1,
-          created_at: new Date().toISOString()
+          status: 'uploaded',
+          order_index: 1
         })
         .select()
         .single();
 
       if (insertError) {
-        console.error('Database insert error:', insertError);
         // Cleanup uploaded file if insert fails
         await supabase.storage
           .from('resumes')
@@ -233,31 +207,22 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         throw insertError;
       }
 
-      // Get public URL for the uploaded file
+      // Step 4: Trigger resume parsing in background
       const { data: { publicUrl } } = supabase.storage
         .from('resumes')
         .getPublicUrl(filePath);
 
-      // Parse the resume
-      const { error: parseError } = await supabase.functions
-        .invoke('parse-resume', {
-          body: { 
-            resumeUrl: publicUrl,
-            userId: user.id,
-            resumeId: resumeData.id
-          }
-        });
-
-      if (parseError) {
-        console.error('Parse error:', parseError);
-        throw parseError;
-      }
-
-      console.log('Resume upload completed successfully');
+      await supabase.functions.invoke('parse-resume', {
+        body: { 
+          resumeUrl: publicUrl,
+          userId: user.id,
+          resumeId: resumeData.id
+        }
+      });
 
       toast({
         title: "Resume uploaded successfully",
-        description: "Your resume is being analyzed. We'll notify you when it's complete.",
+        description: "Your resume is being analyzed in the background. We'll notify you when it's complete.",
       });
 
       setFile(null);
