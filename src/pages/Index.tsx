@@ -10,7 +10,7 @@ const Index = () => {
   const { user } = useAuth();
 
   const handleGetStarted = () => {
-    const targetSection = document.getElementById(user ? 'jobs' : 'auth');
+    const targetSection = document.getElementById(user ? 'resume' : 'auth');
     if (targetSection) {
       targetSection.scrollIntoView({ behavior: 'smooth' });
     }
@@ -32,26 +32,26 @@ const Index = () => {
           </section>
         ) : (
           <>
-            <section id="jobs" className="scroll-mt-16">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold mb-2">Available Jobs</h2>
-                {!user && (
-                  <p className="text-muted-foreground max-w-md mx-auto">
-                    Sign in to get personalized matches
-                  </p>
-                )}
-              </div>
-              <JobList />
-            </section>
-
-            <section id="resume" className="scroll-mt-16 bg-secondary/50 rounded-xl p-6 mt-8">
+            <section id="resume" className="scroll-mt-16 max-w-2xl mx-auto animate-fade-in">
               <div className="text-center mb-6">
-                <h2 className="text-xl font-bold mb-2">Resume Settings</h2>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Update your resume to improve job matches
+                <h2 className="text-xl font-bold mb-2">Your Resume</h2>
+                <p className="text-sm text-muted-foreground">
+                  Upload or update your resume to get personalized job matches
                 </p>
               </div>
-              <ResumeUpload />
+              <div className="bg-gradient-to-b from-secondary/80 to-secondary/20 rounded-xl p-6 backdrop-blur-sm border border-secondary shadow-lg">
+                <ResumeUpload />
+              </div>
+            </section>
+
+            <section id="jobs" className="scroll-mt-16 animate-fade-in">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold mb-2">Available Jobs</h2>
+                <p className="text-muted-foreground max-w-md mx-auto">
+                  Matches based on your profile
+                </p>
+              </div>
+              <JobList />
             </section>
           </>
         )}
