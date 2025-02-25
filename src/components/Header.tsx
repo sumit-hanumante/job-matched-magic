@@ -7,6 +7,7 @@ import { User2, Search } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Auth from "./Auth";
+import { Link } from "react-router-dom";
 
 const Logo = () => (
   <div className="flex items-center gap-2">
@@ -36,18 +37,21 @@ const Header = () => {
   return (
     <header className="bg-white/80 backdrop-blur-lg border-b sticky top-0 z-50">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-        <a href="/" className="hover:opacity-90 transition-opacity">
+        <Link to="/" className="hover:opacity-90 transition-opacity">
           <Logo />
-        </a>
+        </Link>
         
         {user ? (
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-secondary/50 px-4 py-2 rounded-full">
+            <Link 
+              to="/profile" 
+              className="flex items-center gap-2 bg-secondary/50 px-4 py-2 rounded-full hover:bg-secondary/70 transition-colors"
+            >
               <User2 className="w-4 h-4 text-primary" />
               <span className="text-sm font-medium">
                 {user.user_metadata?.full_name || user.email?.split('@')[0]}
               </span>
-            </div>
+            </Link>
             <Button 
               variant="outline" 
               onClick={handleSignOut}
@@ -80,4 +84,3 @@ const Header = () => {
 };
 
 export default Header;
-

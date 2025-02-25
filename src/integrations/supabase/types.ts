@@ -197,6 +197,48 @@ export type Database = {
         }
         Relationships: []
       }
+      user_preferences: {
+        Row: {
+          created_at: string
+          github_url: string | null
+          id: string
+          job_alerts: boolean | null
+          job_search_status: string | null
+          linkedin_url: string | null
+          portfolio_url: string | null
+          preferred_job_types: string[] | null
+          preferred_locations: string[] | null
+          preferred_salary_range: unknown | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          github_url?: string | null
+          id: string
+          job_alerts?: boolean | null
+          job_search_status?: string | null
+          linkedin_url?: string | null
+          portfolio_url?: string | null
+          preferred_job_types?: string[] | null
+          preferred_locations?: string[] | null
+          preferred_salary_range?: unknown | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          github_url?: string | null
+          id?: string
+          job_alerts?: boolean | null
+          job_search_status?: string | null
+          linkedin_url?: string | null
+          portfolio_url?: string | null
+          preferred_job_types?: string[] | null
+          preferred_locations?: string[] | null
+          preferred_salary_range?: unknown | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
