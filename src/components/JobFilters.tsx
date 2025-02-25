@@ -1,4 +1,3 @@
-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 
@@ -29,33 +28,18 @@ export const JobFilters = ({
     onSourceChange(value);
   };
 
-  const handleJobTypeChange = (value: string) => {
-    console.log('Job type change clicked:', value);
-    onJobTypeChange(value);
-  };
-
-  const handleRefreshClick = () => {
-    console.log('Refresh clicked');
-    onRefresh();
-  };
-
-  const handleFetchJobsClick = () => {
-    console.log('Fetch jobs clicked');
-    onFetchJobs();
-  };
-
   return (
     <div className="flex flex-col sm:flex-row gap-2">
       <Select 
-        defaultValue={selectedSource}
+        value={selectedSource}
         onValueChange={handleSourceChange}
       >
-        <SelectTrigger className="w-[180px] bg-white">
-          <SelectValue>
+        <SelectTrigger className="w-[180px] bg-white z-40">
+          <SelectValue placeholder="Select source">
             {selectedSource === 'all' ? 'All Sources' : selectedSource}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent className="bg-white z-50">
+        <SelectContent position="popper" className="bg-white z-50">
           <SelectItem value="all">All Sources</SelectItem>
           {LEGAL_SOURCES.map(source => (
             <SelectItem key={source} value={source}>
@@ -66,11 +50,11 @@ export const JobFilters = ({
       </Select>
 
       <Select 
-        defaultValue={selectedJobType}
-        onValueChange={handleJobTypeChange}
+        value={selectedJobType}
+        onValueChange={onJobTypeChange}
       >
         <SelectTrigger className="w-[180px] bg-white">
-          <SelectValue>
+          <SelectValue placeholder="Select job type">
             {selectedJobType}
           </SelectValue>
         </SelectTrigger>
@@ -84,7 +68,7 @@ export const JobFilters = ({
       </Select>
 
       <Button 
-        onClick={handleRefreshClick}
+        onClick={onRefresh}
         variant="outline"
         className="whitespace-nowrap bg-white"
       >
@@ -92,7 +76,7 @@ export const JobFilters = ({
       </Button>
 
       <Button 
-        onClick={handleFetchJobsClick}
+        onClick={onFetchJobs}
         disabled={isScrapingJobs}
         className="whitespace-nowrap bg-primary text-white"
       >
