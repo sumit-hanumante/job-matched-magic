@@ -107,7 +107,6 @@ const ResumeUpload = () => {
     const filePath = `${user.id}/${fileName}`;
 
     try {
-      // If there's an existing file, delete it from storage
       if (currentResume?.file_path) {
         const { error: deleteError } = await supabase.storage
           .from('resumes')
@@ -118,7 +117,6 @@ const ResumeUpload = () => {
         }
       }
 
-      // Upload new file
       const { error: uploadError } = await supabase.storage
         .from('resumes')
         .upload(filePath, file);
@@ -127,7 +125,6 @@ const ResumeUpload = () => {
         throw uploadError;
       }
 
-      // Upsert resume record
       const { error: upsertError } = await supabase
         .from('resumes')
         .upsert({
@@ -142,7 +139,6 @@ const ResumeUpload = () => {
         });
 
       if (upsertError) {
-        // If upsert fails, clean up the uploaded file
         await supabase.storage
           .from('resumes')
           .remove([filePath]);
@@ -171,7 +167,21 @@ const ResumeUpload = () => {
     }
   };
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="w-full max-w-xl mx-auto">
+        <ResumeDropzone
+          isDragging={false}
+          onDragOver={() => {}}
+          onDragLeave={() => {}}
+          onDrop={() => {}}
+          onFileSelect={() => {}}
+          hasExistingResume={false}
+          isAuthenticated={false}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-xl mx-auto">
@@ -180,6 +190,10 @@ const ResumeUpload = () => {
           filename={currentResume.filename || ''}
           uploadedAt={currentResume.uploaded_at || ''}
           status={currentResume.status || ''}
+          onUpdateClick={() => {
+            const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+            if (fileInput) fileInput.click();
+          }}
         />
       )}
 
@@ -190,6 +204,7 @@ const ResumeUpload = () => {
         onDrop={handleDrop}
         onFileSelect={handleFileInput}
         hasExistingResume={!!currentResume}
+        isAuthenticated={true}
       />
 
       {file && (

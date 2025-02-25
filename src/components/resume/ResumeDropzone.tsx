@@ -1,5 +1,6 @@
 
-import { Upload, FileText } from "lucide-react";
+import { Upload, FileText, Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ResumeDropzoneProps {
   isDragging: boolean;
@@ -8,6 +9,7 @@ interface ResumeDropzoneProps {
   onDrop: (e: React.DragEvent) => void;
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   hasExistingResume: boolean;
+  isAuthenticated: boolean;
 }
 
 const ResumeDropzone = ({
@@ -17,7 +19,23 @@ const ResumeDropzone = ({
   onDrop,
   onFileSelect,
   hasExistingResume,
+  isAuthenticated,
 }: ResumeDropzoneProps) => {
+  if (!isAuthenticated) {
+    return (
+      <div className="p-8 rounded-xl text-center border-2 border-dashed border-gray-200 bg-secondary/50">
+        <div className="relative mb-4">
+          <div className="absolute inset-0 bg-primary/5 rounded-full w-20 h-20 mx-auto" />
+          <Lock className="w-12 h-12 mx-auto text-muted-foreground relative" />
+        </div>
+        <h3 className="text-lg font-semibold mb-2">Sign In Required</h3>
+        <p className="text-sm text-muted-foreground">
+          Please sign in to upload your resume and get personalized job matches
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div
       onDragOver={onDragOver}

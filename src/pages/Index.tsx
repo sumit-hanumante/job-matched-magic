@@ -10,9 +10,9 @@ const Index = () => {
   const { user } = useAuth();
 
   const handleGetStarted = () => {
-    const authSection = document.getElementById('auth');
-    if (authSection) {
-      authSection.scrollIntoView({ behavior: 'smooth' });
+    const targetSection = document.getElementById(user ? 'resume' : 'auth');
+    if (targetSection) {
+      targetSection.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
@@ -24,7 +24,11 @@ const Index = () => {
       <main className="container mx-auto px-4 py-32 space-y-32">
         {!user ? (
           <section id="auth" className="scroll-mt-32">
-            <h2 className="text-3xl font-bold text-center mb-8">Get Started</h2>
+            <h2 className="text-3xl font-bold text-center mb-8">Get Started Today</h2>
+            <p className="text-center text-muted-foreground mb-8 max-w-2xl mx-auto">
+              Create an account to upload your resume and get personalized job matches. 
+              Our AI-powered platform will analyze your skills and experience to find the best opportunities for you.
+            </p>
             <Auth />
           </section>
         ) : (
@@ -33,7 +37,8 @@ const Index = () => {
               <div className="text-center mb-12">
                 <h2 className="text-3xl font-bold mb-4">Upload Your Resume</h2>
                 <p className="text-muted-foreground max-w-2xl mx-auto">
-                  Upload your resume to get personalized job matches based on your skills and experience.
+                  Let our AI analyze your resume and match you with the perfect job opportunities. 
+                  We'll consider your skills, experience, and career goals to find the best matches.
                 </p>
               </div>
               <ResumeUpload />
@@ -43,7 +48,8 @@ const Index = () => {
               <div className="text-center mb-12">
                 <h2 className="text-3xl font-bold mb-4">Your Job Matches</h2>
                 <p className="text-muted-foreground max-w-2xl mx-auto">
-                  Based on your skills and experience, we've found these opportunities that match your profile.
+                  Based on your resume and preferences, we've found these opportunities that align with your profile. 
+                  Our AI continuously updates these matches as new positions become available.
                 </p>
               </div>
               <JobList />

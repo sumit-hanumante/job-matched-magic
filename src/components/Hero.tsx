@@ -17,7 +17,6 @@ const Hero = ({ onGetStarted }: HeroProps) => {
       const dot = document.createElement('div');
       dot.className = 'ai-dots';
       
-      // Random starting position
       const startX = Math.random() * window.innerWidth;
       const startY = Math.random() * window.innerHeight;
       dot.style.left = `${startX}px`;
@@ -25,7 +24,6 @@ const Hero = ({ onGetStarted }: HeroProps) => {
       
       dotsRef.current.appendChild(dot);
       
-      // Remove dot after animation
       setTimeout(() => {
         dot.remove();
       }, 3000);
@@ -42,45 +40,30 @@ const Hero = ({ onGetStarted }: HeroProps) => {
       
       <div className="bg-white/30 backdrop-blur-sm px-6 py-2.5 rounded-2xl shadow-sm mb-12 animate-fade-in">
         <span className="text-base md:text-lg font-semibold gradient-text tracking-wide">
-          AI-Powered Job Matching
+          Smart Job Matching Platform
         </span>
       </div>
       
       <div className="space-y-6 max-w-4xl">
         <h1 className="text-4xl md:text-7xl font-bold tracking-tight">
-          {["Find", "Your", "Perfect", "Job", "Match"].map((word, i) => (
-            <span
-              key={i}
-              className="text-reveal inline-block mr-[0.2em]"
-              style={{ animationDelay: `${i * 0.1}s` }}
-            >
-              {word.split('').map((letter, j) => (
-                <span
-                  key={j}
-                  style={{ animationDelay: `${i * 0.1 + j * 0.03}s` }}
-                >
-                  {letter}
-                </span>
-              ))}
-            </span>
-          ))}
+          Find Your Dream Job with AI
         </h1>
-        <p className="text-xl md:text-2xl font-medium text-muted-foreground animate-fade-in" style={{ animationDelay: "0.8s" }}>
-          Powered by AI
+        <p className="text-xl md:text-2xl font-medium text-muted-foreground animate-fade-in">
+          Let AI Match You with the Perfect Career Opportunity
         </p>
       </div>
       
-      <p className="text-lg text-muted-foreground max-w-2xl mt-8 mb-12 animate-fade-in leading-relaxed" style={{ animationDelay: "1s" }}>
-        Upload your resume and get instant matches with the most relevant job opportunities.
+      <p className="text-lg text-muted-foreground max-w-2xl mt-8 mb-12 animate-fade-in leading-relaxed">
+        Upload your resume and let our AI-powered platform connect you with relevant job opportunities. 
+        Get personalized matches based on your skills, experience, and career goals.
       </p>
       
       <Button
         onClick={onGetStarted}
         size="lg"
         className="text-base px-8 py-6 animate-fade-in shadow-lg hover:shadow-xl transition-all duration-300"
-        style={{ animationDelay: "1.2s" }}
       >
-        Get Started
+        Get Started Now
         <ArrowDown className="h-4 w-4 ml-2" />
       </Button>
     </div>
