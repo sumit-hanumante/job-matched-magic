@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -21,7 +20,7 @@ interface SourceCount {
 }
 
 const INITIAL_JOB_LIMIT = 10;
-const ADMIN_EMAIL = 'tes@gmail.com'; // TODO: Move this to env variable
+const ADMIN_EMAIL = 'test@gmail.com'; // Fixed admin email
 
 const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
