@@ -6,9 +6,10 @@ interface ResumeUploadFormProps {
   file: File;
   isUploading: boolean;
   onUpload: () => void;
+  isAuthenticated: boolean;
 }
 
-const ResumeUploadForm = ({ file, isUploading, onUpload }: ResumeUploadFormProps) => {
+const ResumeUploadForm = ({ file, isUploading, onUpload, isAuthenticated }: ResumeUploadFormProps) => {
   if (!file) return null;
 
   return (
@@ -17,6 +18,11 @@ const ResumeUploadForm = ({ file, isUploading, onUpload }: ResumeUploadFormProps
         <FileText className="w-4 h-4" />
         {file.name}
       </div>
+      {!isAuthenticated && (
+        <p className="text-sm text-primary bg-primary/5 p-3 rounded-lg text-center">
+          Click upload to continue. You'll be asked to create an account to save your resume and get personalized job matches.
+        </p>
+      )}
       <Button 
         onClick={onUpload} 
         disabled={isUploading}

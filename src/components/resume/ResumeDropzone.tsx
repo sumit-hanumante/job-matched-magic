@@ -21,21 +21,6 @@ const ResumeDropzone = ({
   hasExistingResume,
   isAuthenticated,
 }: ResumeDropzoneProps) => {
-  if (!isAuthenticated) {
-    return (
-      <div className="p-8 rounded-xl text-center border-2 border-dashed border-gray-200 bg-secondary/50">
-        <div className="relative mb-4">
-          <div className="absolute inset-0 bg-primary/5 rounded-full w-20 h-20 mx-auto" />
-          <Lock className="w-12 h-12 mx-auto text-muted-foreground relative" />
-        </div>
-        <h3 className="text-lg font-semibold mb-2">Sign In Required</h3>
-        <p className="text-sm text-muted-foreground">
-          Please sign in to upload your resume and get personalized job matches
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div
       onDragOver={onDragOver}
@@ -68,6 +53,12 @@ const ResumeDropzone = ({
       <p className="text-sm text-muted-foreground mb-4">
         Drop your PDF or DOCX file here, or click to browse
       </p>
+      
+      {!isAuthenticated && (
+        <p className="text-sm text-primary/80 mb-4 bg-primary/5 p-2 rounded-lg">
+          Sign in after uploading to save your resume and get personalized job matches
+        </p>
+      )}
       
       <input
         type="file"

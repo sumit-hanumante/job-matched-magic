@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,14 +8,21 @@ import { Label } from '@/components/ui/label';
 
 export interface AuthProps {
   onSuccess?: () => void;
+  defaultEmail?: string;
+  defaultName?: string;
 }
 
-const Auth = ({ onSuccess }: AuthProps) => {
+const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => {
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [fullName, setFullName] = useState(defaultName);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setEmail(defaultEmail);
+    setFullName(defaultName);
+  }, [defaultEmail, defaultName]);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

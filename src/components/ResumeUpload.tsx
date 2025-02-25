@@ -7,7 +7,7 @@ import ResumeDropzone from "./resume/ResumeDropzone";
 import ResumeUploadForm from "./resume/ResumeUploadForm";
 
 interface ResumeUploadProps {
-  onLoginRequired?: () => void;
+  onLoginRequired?: (email?: string, fullName?: string) => void;
 }
 
 const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
@@ -86,40 +86,54 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
-  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      if (selectedFile.type === "application/pdf" || selectedFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-        if (!user && onLoginRequired) {
-          onLoginRequired();
-        }
-        setFile(selectedFile);
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Invalid file type",
-          description: "Please upload a PDF or DOCX file",
-        });
-      }
+    if (selectedFile && (selectedFile.type === "application/pdf" || selectedFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
+      setFile(selectedFile);
     }
   };
 
   const uploadResume = async () => {
     if (!file) return;
-    
-    if (!user) {
-      if (onLoginRequired) {
-        onLoginRequired();
-      }
-      return;
-    }
-
-    setIsUploading(true);
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${crypto.randomUUID()}.${fileExt}`;
-    const filePath = `${user.id}/${fileName}`;
 
     try {
+      setIsUploading(true);
+
+      // Create form data to send the file
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Call the resume parser API endpoint
+      const response = await fetch('/api/parse-resume', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!user && onLoginRequired) {
+        // Extract email and name from parsed resume data
+        const email = data.email;
+        const fullName = data.fullName;
+        onLoginRequired(email, fullName);
+        return;
+      }
+
+      if (!user) {
+        toast({
+          title: "Resume uploaded successfully",
+          description: "Create an account to save your resume and get personalized job matches.",
+        });
+        setFile(null);
+        const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+        return;
+      }
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+
       if (currentResume?.file_path) {
         const { error: deleteError } = await supabase.storage
           .from('resumes')
@@ -168,6 +182,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       if (fileInput) fileInput.value = '';
       
       await fetchCurrentResume();
+      
     } catch (error) {
       console.error('Upload error:', error);
       toast({
@@ -179,22 +194,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       setIsUploading(false);
     }
   };
-
-  if (!user) {
-    return (
-      <div className="w-full max-w-xl mx-auto">
-        <ResumeDropzone
-          isDragging={false}
-          onDragOver={() => {}}
-          onDragLeave={() => {}}
-          onDrop={() => {}}
-          onFileSelect={() => {}}
-          hasExistingResume={false}
-          isAuthenticated={false}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="w-full max-w-xl mx-auto">
@@ -225,6 +224,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           file={file}
           isUploading={isUploading}
           onUpload={uploadResume}
+          isAuthenticated={!!user}
         />
       )}
     </div>

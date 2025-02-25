@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 const Index = () => {
   const { user } = useAuth();
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [prefilledEmail, setPrefilledEmail] = useState("");
+  const [prefilledName, setPrefilledName] = useState("");
 
   const handleGetStarted = () => {
     const targetSection = document.getElementById('resume');
@@ -19,7 +21,9 @@ const Index = () => {
     }
   };
 
-  const handleLoginPrompt = () => {
+  const handleLoginPrompt = (email?: string, fullName?: string) => {
+    if (email) setPrefilledEmail(email);
+    if (fullName) setPrefilledName(fullName);
     setShowAuthDialog(true);
   };
 
@@ -48,7 +52,7 @@ const Index = () => {
               {user ? 'Matches based on your profile' : 'Latest opportunities'}
             </p>
           </div>
-          <JobList onLoginRequired={handleLoginPrompt} />
+          <JobList onLoginRequired={() => setShowAuthDialog(true)} />
         </section>
 
         <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
@@ -56,7 +60,11 @@ const Index = () => {
             <DialogHeader>
               <DialogTitle>Sign in to continue</DialogTitle>
             </DialogHeader>
-            <Auth onSuccess={() => setShowAuthDialog(false)} />
+            <Auth 
+              onSuccess={() => setShowAuthDialog(false)}
+              defaultEmail={prefilledEmail}
+              defaultName={prefilledName}
+            />
           </DialogContent>
         </Dialog>
       </main>
