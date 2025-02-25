@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
@@ -19,7 +20,8 @@ interface SourceCount {
   count: number;
 }
 
-const INITIAL_JOB_LIMIT = 20;
+const INITIAL_JOB_LIMIT = 10;
+const ADMIN_EMAIL = 'tes@gmail.com'; // TODO: Move this to env variable
 
 const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -31,6 +33,8 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   const [selectedJobType, setSelectedJobType] = useState<string>("software developer");
   const { user } = useAuth();
   const navigate = useNavigate();
+  
+  const isAdmin = user?.email === ADMIN_EMAIL;
 
   const handleJobClick = (job: Job) => {
     if (!user) {
@@ -44,6 +48,8 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   };
 
   const scrapeJobs = async () => {
+    if (!isAdmin) return;
+    
     try {
       setIsScrapingJobs(true);
       setScrapingError(null);
@@ -79,47 +85,42 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     try {
       let query = supabase.from('jobs').select('*');
       
-      if (selectedSource !== 'all') {
-        query = query.eq('source', selectedSource);
+      // For admin users, apply filters
+      if (isAdmin) {
+        if (selectedSource !== 'all') {
+          query = query.eq('source', selectedSource);
+        }
       } else {
-        query = query.in('source', ['remoteok', 'arbeitnow', 'adzuna']);
+        // For regular users, just get random 10 jobs
+        query = query.limit(INITIAL_JOB_LIMIT);
       }
 
-      const { data: jobsData, error: jobsError } = await query;
+      // Get source counts for admin view
+      if (isAdmin) {
+        const { data: jobsData } = await supabase.from('jobs').select('*');
+        
+        if (jobsData) {
+          const sourceCounts = jobsData.reduce<Record<string, number>>((acc, job) => {
+            acc[job.source] = (acc[job.source] || 0) + 1;
+            return acc;
+          }, {});
 
-      if (jobsError) throw jobsError;
-
-      if (jobsData) {
-        const sourceCounts = jobsData.reduce<Record<string, number>>((acc, job) => {
-          acc[job.source] = (acc[job.source] || 0) + 1;
-          return acc;
-        }, {});
-
-        setUniqueSources(Object.entries(sourceCounts).map(([source, count]) => ({
-          source,
-          count
-        })));
+          setUniqueSources(Object.entries(sourceCounts).map(([source, count]) => ({
+            source,
+            count
+          })));
+        }
       }
 
-      let latestJobsQuery = supabase
-        .from('jobs')
-        .select('*')
-        .order('posted_date', { ascending: false })
-        .limit(INITIAL_JOB_LIMIT);
-
-      if (selectedSource !== 'all') {
-        latestJobsQuery = latestJobsQuery.eq('source', selectedSource);
-      } else {
-        latestJobsQuery = latestJobsQuery.in('source', ['remoteok', 'arbeitnow', 'adzuna']);
-      }
-
-      const { data: latestJobs, error: latestJobsError } = await latestJobsQuery;
+      // Get the actual jobs
+      const { data: latestJobs, error: latestJobsError } = await query
+        .order('posted_date', { ascending: false });
 
       if (latestJobsError) throw latestJobsError;
 
       const transformedJobs = latestJobs?.map(job => ({
         ...job,
-        matchScore: 0,
+        matchScore: 0, // TODO: Implement job matching
         postedDate: new Date(job.posted_date).toISOString().split('T')[0],
         applyUrl: job.apply_url,
         salaryRange: job.salary_range,
@@ -166,30 +167,29 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     );
   }
 
-  const legalSources = ['remoteok', 'arbeitnow', 'adzuna'];
-  const activeSources = uniqueSources.filter(s => legalSources.includes(s.source));
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
-          <JobListHeader 
-            jobCount={jobs.length}
-            selectedSource={selectedSource}
-            lastUpdated={jobs[0]?.lastScrapedAt}
-            activeSources={activeSources}
-          />
-          <JobFilters 
-            selectedSource={selectedSource}
-            selectedJobType={selectedJobType}
-            onSourceChange={setSelectedSource}
-            onJobTypeChange={setSelectedJobType}
-            onRefresh={fetchJobs}
-            onFetchJobs={scrapeJobs}
-            isScrapingJobs={isScrapingJobs}
-          />
-        </div>
-        {scrapingError && (
+        {isAdmin && (
+          <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+            <JobListHeader 
+              jobCount={jobs.length}
+              selectedSource={selectedSource}
+              lastUpdated={jobs[0]?.lastScrapedAt}
+              activeSources={uniqueSources}
+            />
+            <JobFilters 
+              selectedSource={selectedSource}
+              selectedJobType={selectedJobType}
+              onSourceChange={setSelectedSource}
+              onJobTypeChange={setSelectedJobType}
+              onRefresh={fetchJobs}
+              onFetchJobs={scrapeJobs}
+              isScrapingJobs={isScrapingJobs}
+            />
+          </div>
+        )}
+        {scrapingError && isAdmin && (
           <div className="p-4 border border-red-200 bg-red-50 rounded-md">
             <p className="text-sm text-red-600">Error while fetching new jobs: {scrapingError}</p>
           </div>
