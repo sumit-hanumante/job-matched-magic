@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 
-interface AuthProps {
+export interface AuthProps {
   onSuccess?: () => void;
 }
 
