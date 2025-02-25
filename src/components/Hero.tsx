@@ -34,36 +34,24 @@ const Hero = ({ onGetStarted }: HeroProps) => {
   }, []);
 
   return (
-    <div className="min-h-[90vh] flex flex-col items-center justify-center text-center px-4 relative overflow-hidden">
+    <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-4 relative overflow-hidden">
       <div className="ai-grid" />
       <div ref={dotsRef} className="absolute inset-0 pointer-events-none" />
       
-      <div className="bg-white/30 backdrop-blur-sm px-6 py-2.5 rounded-2xl shadow-sm mb-12 animate-fade-in">
-        <span className="text-base md:text-lg font-semibold gradient-text tracking-wide">
-          Smart Job Matching Platform
-        </span>
-      </div>
+      <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
+        AI-Powered Job Matching
+      </h1>
       
-      <div className="space-y-6 max-w-4xl">
-        <h1 className="text-4xl md:text-7xl font-bold tracking-tight">
-          Find Your Dream Job with AI
-        </h1>
-        <p className="text-xl md:text-2xl font-medium text-muted-foreground animate-fade-in">
-          Let AI Match You with the Perfect Career Opportunity
-        </p>
-      </div>
-      
-      <p className="text-lg text-muted-foreground max-w-2xl mt-8 mb-12 animate-fade-in leading-relaxed">
-        Upload your resume and let our AI-powered platform connect you with relevant job opportunities. 
-        Get personalized matches based on your skills, experience, and career goals.
+      <p className="text-lg md:text-xl text-muted-foreground max-w-lg mb-8">
+        Upload once, get matched with relevant jobs instantly
       </p>
       
       <Button
         onClick={onGetStarted}
         size="lg"
-        className="text-base px-8 py-6 animate-fade-in shadow-lg hover:shadow-xl transition-all duration-300"
+        className="text-base px-8"
       >
-        Get Started Now
+        Find Jobs Now
         <ArrowDown className="h-4 w-4 ml-2" />
       </Button>
     </div>
