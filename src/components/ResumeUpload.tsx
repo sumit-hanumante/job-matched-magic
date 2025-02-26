@@ -138,6 +138,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       setIsUploading(true);
       console.log('Starting resume upload...');
 
+      // For non-authenticated users
       if (!user) {
         // For non-authenticated users, upload to temp storage
         const tempFileName = `${crypto.randomUUID()}-${file.name}`;
@@ -171,10 +172,29 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       // For authenticated users
       console.log('Authenticated user, proceeding with upload...');
 
-      // Step 1: Shift existing resumes
+      // Step 1: Read the file content for parsing
+      const fileText = await file.text();
+      console.log('File content read, starting parsing...');
+
+      // Step 2: Call parse-resume function with file content
+      const { data: parseResponse, error: parseError } = await supabase.functions.invoke('parse-resume', {
+        body: { 
+          resumeText: fileText,
+          debugMode: true
+        }
+      });
+
+      if (parseError) {
+        console.error('Parsing error:', parseError);
+        throw parseError;
+      }
+
+      console.log('Resume parsed successfully:', parseResponse);
+
+      // Step 3: Shift existing resumes
       await shiftResumes(user.id);
 
-      // Step 2: Upload new file
+      // Step 4: Upload new file
       const fileExt = file.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
@@ -185,7 +205,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
 
       if (uploadError) throw uploadError;
 
-      // Step 3: Create resume record
+      // Step 5: Create resume record with parsed data
       const { error: insertError, data: resumeData } = await supabase
         .from('resumes')
         .insert({
@@ -193,8 +213,12 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           file_name: file.name,
           file_path: filePath,
           content_type: file.type,
-          status: 'uploaded',
-          order_index: 1
+          status: 'processed',
+          order_index: 1,
+          extracted_skills: parseResponse?.skills || [],
+          experience: parseResponse?.experience || '',
+          preferred_locations: parseResponse?.preferredLocations || [],
+          preferred_companies: parseResponse?.preferredCompanies || []
         })
         .select()
         .single();
@@ -207,22 +231,9 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         throw insertError;
       }
 
-      // Step 4: Trigger resume parsing in background
-      const { data: { publicUrl } } = supabase.storage
-        .from('resumes')
-        .getPublicUrl(filePath);
-
-      await supabase.functions.invoke('parse-resume', {
-        body: { 
-          resumeUrl: publicUrl,
-          userId: user.id,
-          resumeId: resumeData.id
-        }
-      });
-
       toast({
         title: "Resume uploaded successfully",
-        description: "Your resume is being analyzed in the background. We'll notify you when it's complete.",
+        description: "Your resume has been processed and saved.",
       });
 
       setFile(null);
