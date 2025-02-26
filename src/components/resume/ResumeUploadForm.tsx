@@ -49,7 +49,8 @@ const ResumeUploadForm = ({ file, isUploading, onUpload, isAuthenticated }: Resu
         experience: parseResponse?.experience || '',
         preferred_locations: parseResponse?.preferredLocations || [],
         preferred_companies: parseResponse?.preferredCompanies || [],
-        status: 'processed'
+        status: 'processed',
+        order_index: 1 // Will be adjusted during actual upload
       };
 
       setDebugInfo(prev => prev + "\n\nDB Payload that would be saved: " + JSON.stringify(dbPayload, null, 2));
