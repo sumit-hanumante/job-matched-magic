@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/AuthProvider";
-import ResumeDisplay from "./resume/ResumeDisplay";
-import ResumeDropzone from "./resume/ResumeDropzone";
-import ResumeUploadForm from "./resume/ResumeUploadForm";
+import ResumeDisplay from "./ResumeDisplay";
+import ResumeDropzone from "./ResumeDropzone";
+import ResumeUploadForm from "./ResumeUploadForm";
 
 interface ResumeUploadProps {
   onLoginRequired?: (email?: string, fullName?: string) => void;
