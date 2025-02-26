@@ -88,39 +88,20 @@ serve(async (req) => {
   }
 
   try {
-    const { resumeUrl, userId, resumeId } = await req.json();
-    console.log('Processing resume for user:', userId);
+    const { resumeText } = await req.json();
+    console.log('Received resume text length:', resumeText.length);
     
-    // Get the resume content
-    const response = await fetch(resumeUrl);
-    const resumeContent = await response.text();
-
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const supabase = createClient(supabaseUrl!, supabaseKey!);
-
     // Get available AI provider
     const provider = getAvailableProvider();
     console.log('Using AI provider:', provider.name);
 
+    if (!resumeText) {
+      throw new Error('No resume text provided');
+    }
+
     // Process the resume
-    const parsedResume = await provider.processResume(resumeContent);
+    const parsedResume = await provider.processResume(resumeText);
     console.log('Parsed resume:', parsedResume);
-
-    // Update resume record with extracted information
-    const { error: updateError } = await supabase
-      .from('resumes')
-      .update({
-        status: 'processed',
-        extracted_skills: parsedResume.skills,
-        experience: parsedResume.experience,
-        preferred_locations: parsedResume.preferredLocations || [],
-        preferred_companies: parsedResume.preferredCompanies || []
-      })
-      .eq('id', resumeId);
-
-    if (updateError) throw updateError;
 
     return new Response(
       JSON.stringify({ success: true, data: parsedResume }),
