@@ -36,22 +36,8 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
       }
 
       console.log('Authenticated user, proceeding with upload...');
-      const fileText = await file.text();
-      console.log('File content read, starting parsing...');
 
-      const { data: parseResponse, error: parseError } = await supabase.functions.invoke('parse-resume', {
-        body: { 
-          resumeText: fileText,
-          debugMode: true
-        }
-      });
-
-      if (parseError) throw parseError;
-
-      console.log('Resume parsed successfully:', parseResponse);
-
-      await shiftResumes(user.id);
-
+      // First, try to upload the file
       const fileExt = file.name.split('.').pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
@@ -62,6 +48,30 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
 
       if (uploadError) throw uploadError;
 
+      console.log('File uploaded successfully, starting parsing...');
+
+      // Then try to parse it
+      let parseResponse;
+      try {
+        const fileText = await file.text();
+        const { data, error: parseError } = await supabase.functions.invoke('parse-resume', {
+          body: { 
+            resumeText: fileText,
+            debugMode: true
+          }
+        });
+        
+        if (parseError) throw parseError;
+        parseResponse = data;
+        console.log('Resume parsed successfully:', parseResponse);
+      } catch (parseError) {
+        console.error('Parsing failed:', parseError);
+        // Continue with upload but mark as pending parsing
+        parseResponse = null;
+      }
+
+      await shiftResumes(user.id);
+
       const { error: insertError } = await supabase
         .from('resumes')
         .insert({
@@ -69,7 +79,7 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
           file_name: file.name,
           file_path: filePath,
           content_type: file.type,
-          status: 'processed',
+          status: parseResponse ? 'processed' : 'pending',
           order_index: 1,
           extracted_skills: parseResponse?.skills || [],
           experience: parseResponse?.experience || '',
@@ -80,6 +90,7 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
         .single();
 
       if (insertError) {
+        // Cleanup uploaded file if insert fails
         await supabase.storage
           .from('resumes')
           .remove([filePath]);
@@ -88,7 +99,9 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
 
       toast({
         title: "Resume uploaded successfully",
-        description: "Your resume has been processed and saved.",
+        description: parseResponse 
+          ? "Your resume has been processed and saved."
+          : "Your resume has been uploaded. We'll process it shortly.",
       });
 
       return true;
