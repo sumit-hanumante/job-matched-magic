@@ -23,15 +23,15 @@ const ResumeUploadForm = ({ file, isUploading, onUpload, isAuthenticated }: Resu
     try {
       setDebugInfo("Starting debug process...");
       
-      // 1. Test direct text parsing
-      const testText = "B1 wing FlatNo-b202 mahesh galaxy, near sinhgad college vadgaon budruk pune 411041";
-      setDebugInfo(prev => prev + "\n\nTesting with text: " + testText);
+      // 1. Read the actual file content
+      const fileText = await file.text();
+      setDebugInfo(prev => prev + "\n\nReading file content: " + file.name);
 
-      // 2. Call parse-resume function
-      setDebugInfo(prev => prev + "\n\nCalling AI parse function...");
+      // 2. Call parse-resume function with actual file content
+      setDebugInfo(prev => prev + "\n\nCalling AI parse function with file content...");
       const { data: parseResponse, error: parseError } = await supabase.functions.invoke('parse-resume', {
         body: { 
-          resumeText: testText,
+          resumeText: fileText,
           debugMode: true
         }
       });
