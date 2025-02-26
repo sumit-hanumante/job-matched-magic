@@ -31,7 +31,7 @@ const ResumeUploadForm = ({ file, isUploading, onUpload, isAuthenticated }: Resu
         {isUploading ? (
           <span className="flex items-center gap-2">
             <RefreshCw className="w-4 h-4 animate-spin" />
-            Uploading...
+            {isUploading ? "Processing Resume..." : "Uploading..."}
           </span>
         ) : (
           "Upload Resume"
