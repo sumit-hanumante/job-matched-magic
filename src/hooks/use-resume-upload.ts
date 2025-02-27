@@ -8,6 +8,40 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
+  const extractTextFromPDF = async (file: File): Promise<string> => {
+    console.log('Starting PDF text extraction');
+    
+    // Read file as ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    
+    // Convert ArrayBuffer to base64
+    const base64String = btoa(
+      new Uint8Array(arrayBuffer)
+        .reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+    
+    console.log('PDF converted to base64, length:', base64String.length);
+    
+    // Call edge function to extract text from PDF
+    try {
+      const { data, error } = await supabase.functions.invoke('extract-pdf-text', {
+        body: { pdfBase64: base64String }
+      });
+      
+      if (error) throw error;
+      
+      console.log('PDF text extracted successfully:', {
+        textLength: data.text.length,
+        sample: data.text.substring(0, 200)
+      });
+      
+      return data.text;
+    } catch (error) {
+      console.error('PDF extraction failed:', error);
+      throw new Error('Failed to extract text from PDF');
+    }
+  };
+
   const extractTextFromFile = async (file: File): Promise<string> => {
     try {
       console.log('Starting text extraction from file:', file.name);
@@ -15,23 +49,13 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
       
       let text = '';
       
-      // For PDF files
       if (file.type === 'application/pdf') {
-        console.log('Processing PDF file...');
-        // Convert the file to a Blob and then read as text
-        const blob = new Blob([file], { type: 'text/plain' });
-        text = await blob.text();
-        console.log('PDF text extracted, length:', text.length);
-        console.log('First 200 characters:', text.substring(0, 200));
-      }
-      // For DOCX files
-      else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        console.log('Processing DOCX file...');
+        text = await extractTextFromPDF(file);
+      } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        // For DOCX, try direct text extraction first
         text = await file.text();
-        console.log('DOCX text extracted, length:', text.length);
-        console.log('First 200 characters:', text.substring(0, 200));
-      }
-      else {
+        console.log('DOCX raw text extracted, length:', text.length);
+      } else {
         throw new Error('Unsupported file type: ' + file.type);
       }
 
@@ -45,8 +69,10 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
         .replace(/\s+/g, ' ') // Replace multiple spaces with single space
         .trim();
 
-      console.log('Cleaned text sample:', text.substring(0, 500));
-      console.log('Total text length after cleaning:', text.length);
+      console.log('Extracted and cleaned text:', {
+        length: text.length,
+        sample: text.substring(0, 500)
+      });
 
       return text;
     } catch (error) {
@@ -87,10 +113,13 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
         return;
       }
 
-      // For now, let's try with raw text as a fallback
-      const fileText = await file.text();
-      console.log('Raw file text length:', fileText.length);
-      console.log('Raw file text sample:', fileText.substring(0, 500));
+      // Extract text from file
+      console.log('Starting text extraction...');
+      const resumeText = await extractTextFromFile(file);
+      console.log('Text extracted successfully:', {
+        length: resumeText.length,
+        sample: resumeText.substring(0, 300)
+      });
 
       // Upload file to storage
       const fileExt = file.name.split('.').pop();
@@ -105,38 +134,18 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
       if (uploadError) throw uploadError;
       console.log('File uploaded successfully to storage');
 
-      // Try to extract text
-      let resumeText = fileText;
-      try {
-        console.log('Attempting structured text extraction...');
-        resumeText = await extractTextFromFile(file);
-      } catch (extractError) {
-        console.warn('Structured extraction failed, using raw text:', extractError);
-      }
-
-      console.log('Final text to be processed:', {
-        length: resumeText.length,
-        sample: resumeText.substring(0, 300)
+      // Parse the resume using the edge function
+      console.log('Sending text to parse-resume function...');
+      const { data: parseResponse, error: parseError } = await supabase.functions.invoke('parse-resume', {
+        body: { resumeText }
       });
 
-      // Parse the resume using the edge function
-      let parseResponse;
-      try {
-        console.log('Sending text to parse-resume function...');
-        const { data, error: parseError } = await supabase.functions.invoke('parse-resume', {
-          body: { 
-            resumeText,
-            debugMode: true
-          }
-        });
-        
-        if (parseError) throw parseError;
-        parseResponse = data;
-        console.log('Resume parsed successfully:', parseResponse);
-      } catch (parseError) {
-        console.error('Parsing failed:', parseError);
-        parseResponse = null;
+      if (parseError) {
+        console.error('Parse resume error:', parseError);
+        throw parseError;
       }
+
+      console.log('Resume parsed successfully:', parseResponse);
 
       await shiftResumes(user.id);
 
@@ -148,12 +157,12 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
           file_name: file.name,
           file_path: filePath,
           content_type: file.type,
-          status: parseResponse ? 'processed' : 'pending',
+          status: 'processed',
           order_index: 1,
-          extracted_skills: parseResponse?.skills || [],
-          experience: parseResponse?.experience || '',
-          preferred_locations: parseResponse?.preferredLocations || [],
-          preferred_companies: parseResponse?.preferredCompanies || []
+          extracted_skills: parseResponse?.data?.skills || [],
+          experience: parseResponse?.data?.experience || '',
+          preferred_locations: parseResponse?.data?.preferredLocations || [],
+          preferred_companies: parseResponse?.data?.preferredCompanies || []
         })
         .select()
         .single();
@@ -169,9 +178,7 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
       console.log('Resume upload process completed successfully');
       toast({
         title: "Resume uploaded successfully",
-        description: parseResponse 
-          ? "Your resume has been processed and saved."
-          : "Your resume has been uploaded. We'll process it shortly.",
+        description: "Your resume has been processed and saved.",
       });
 
       return true;

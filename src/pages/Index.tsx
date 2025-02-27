@@ -6,6 +6,7 @@ import Auth from "@/components/Auth";
 import { useAuth } from "@/components/AuthProvider";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Index = () => {
   const { user } = useAuth();

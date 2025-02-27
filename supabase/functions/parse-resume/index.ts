@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.1.3";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
@@ -99,32 +98,19 @@ serve(async (req) => {
 
   try {
     console.log('=========== PARSE RESUME FUNCTION START ===========');
-    console.log('Request received:', req.method, req.url);
     
     const { resumeText } = await req.json();
-    console.log('Received resume text:', {
+    console.log('Received text for parsing:', {
       length: resumeText?.length || 0,
-      sample: resumeText ? resumeText.substring(0, 200) + '...' : 'No text'
+      sample: resumeText ? resumeText.substring(0, 500) + '...' : 'No text'
     });
     
     if (!resumeText) {
       throw new Error('No resume text provided');
     }
 
-    // Clean up the input text
-    const cleanedText = resumeText
-      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Remove control characters
-      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-      .trim();
-
-    console.log('Cleaned input text:', {
-      length: cleanedText.length,
-      sample: cleanedText.substring(0, 200) + '...'
-    });
-
-    const parsedResume = await processWithGemini(cleanedText);
-    console.log('Parse resume function completed successfully');
-    console.log('=========== PARSE RESUME FUNCTION END ===========');
+    const parsedResume = await processWithGemini(resumeText);
+    console.log('Parse resume function completed successfully:', parsedResume);
 
     return new Response(
       JSON.stringify({ success: true, data: parsedResume }),
@@ -133,7 +119,6 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in parse-resume function:', error);
-    console.log('=========== PARSE RESUME FUNCTION ERROR ===========');
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
