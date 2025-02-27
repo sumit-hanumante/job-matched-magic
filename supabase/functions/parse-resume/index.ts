@@ -17,7 +17,10 @@ interface ParsedResume {
 }
 
 async function processWithGemini(content: string): Promise<ParsedResume> {
-  console.log('Starting Gemini processing...');
+  console.log('=========== GEMINI PROCESSING START ===========');
+  console.log('Input text length:', content.length);
+  console.log('Sample of input text:', content.substring(0, 300) + '...');
+  
   const geminiKey = Deno.env.get('GEMINI_API_KEY');
   console.log('Gemini API Key present:', !!geminiKey);
   
@@ -42,14 +45,18 @@ async function processWithGemini(content: string): Promise<ParsedResume> {
     ${content}
   `;
 
+  console.log('Prompt sent to Gemini:', prompt.substring(0, 500) + '...');
+
   try {
     console.log('Sending request to Gemini...');
     const result = await model.generateContent(prompt);
+    console.log('Received response from Gemini');
+    
     const response = result.response;
     const text = response.text();
-    console.log('Raw Gemini response:', text);
+    console.log('Raw response from Gemini:', text);
 
-    // Clean up the response in case it returns markdown
+    // Clean up the response
     const cleanedText = text
       .replace(/```json/g, '')
       .replace(/```/g, '')
@@ -59,15 +66,23 @@ async function processWithGemini(content: string): Promise<ParsedResume> {
     
     // Parse the JSON response
     const parsed = JSON.parse(cleanedText);
-    return {
+    console.log('Parsed JSON:', JSON.stringify(parsed, null, 2));
+
+    const formattedResponse = {
       skills: parsed.skills || [],
       experience: parsed.experience || '',
       education: parsed.education || '',
       preferredLocations: parsed.preferredLocations || [],
       preferredCompanies: parsed.preferredCompanies || []
     };
+
+    console.log('Final formatted response:', JSON.stringify(formattedResponse, null, 2));
+    console.log('=========== GEMINI PROCESSING END ===========');
+    
+    return formattedResponse;
   } catch (error) {
-    console.error('Error processing with Gemini:', error);
+    console.error('Error in Gemini processing:', error);
+    console.log('=========== GEMINI PROCESSING ERROR ===========');
     throw error;
   }
 }
@@ -78,19 +93,22 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Parsing request body...');
+    console.log('=========== PARSE RESUME FUNCTION START ===========');
+    console.log('Request received:', req.method, req.url);
+    
     const { resumeText } = await req.json();
+    console.log('Received resume text:', {
+      length: resumeText?.length || 0,
+      sample: resumeText ? resumeText.substring(0, 200) + '...' : 'No text'
+    });
     
     if (!resumeText) {
       throw new Error('No resume text provided');
     }
 
-    console.log('Resume text length:', resumeText.length);
-    console.log('Sample of resume text:', resumeText.substring(0, 100) + '...');
-
-    // Process the resume with Gemini
     const parsedResume = await processWithGemini(resumeText);
-    console.log('Successfully parsed resume:', parsedResume);
+    console.log('Parse resume function completed successfully');
+    console.log('=========== PARSE RESUME FUNCTION END ===========');
 
     return new Response(
       JSON.stringify({ success: true, data: parsedResume }),
@@ -99,6 +117,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in parse-resume function:', error);
+    console.log('=========== PARSE RESUME FUNCTION ERROR ===========');
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
