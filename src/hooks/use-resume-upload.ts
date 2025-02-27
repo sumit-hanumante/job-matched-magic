@@ -8,6 +8,26 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
+  const extractTextFromFile = async (file: File): Promise<string> => {
+    try {
+      // For PDF files, we'll get the text directly
+      if (file.type === 'application/pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        const text = new TextDecoder().decode(arrayBuffer);
+        return text;
+      }
+      // For DOCX files, we'll get the raw text
+      else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const text = await file.text();
+        return text;
+      }
+      throw new Error('Unsupported file type');
+    } catch (error) {
+      console.error('Error extracting text:', error);
+      throw error;
+    }
+  };
+
   const uploadResume = async (file: File) => {
     if (!file) return;
 
@@ -17,7 +37,7 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
 
       if (!user) {
         const tempFileName = `${crypto.randomUUID()}-${file.name}`;
-        const { error: uploadError, data } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('temp-resumes')
           .upload(tempFileName, file);
 
@@ -48,15 +68,18 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
 
       if (uploadError) throw uploadError;
 
-      console.log('File uploaded successfully, starting parsing...');
+      console.log('File uploaded successfully, extracting text...');
 
-      // Then try to parse it
+      // Extract text from file
+      const resumeText = await extractTextFromFile(file);
+      console.log('Text extracted, length:', resumeText.length);
+
+      // Parse the resume using the edge function
       let parseResponse;
       try {
-        const fileText = await file.text();
         const { data, error: parseError } = await supabase.functions.invoke('parse-resume', {
           body: { 
-            resumeText: fileText,
+            resumeText,
             debugMode: true
           }
         });

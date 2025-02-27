@@ -8,12 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface AIProvider {
-  name: 'gemini' | 'huggingface';
-  apiKey: string;
-  processResume: (content: string) => Promise<ParsedResume>;
-}
-
 interface ParsedResume {
   skills: string[];
   experience: string;
@@ -27,28 +21,25 @@ async function processWithGemini(content: string): Promise<ParsedResume> {
   const geminiKey = Deno.env.get('GEMINI_API_KEY');
   console.log('Gemini API Key present:', !!geminiKey);
   
-  const genAI = new GoogleGenerativeAI(geminiKey || '');
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  if (!geminiKey) {
+    throw new Error('GEMINI_API_KEY not found in environment');
+  }
+
+  const genAI = new GoogleGenerativeAI(geminiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const prompt = `
-    Analyze this resume content and extract the following information in JSON format:
-    - A list of technical and soft skills
-    - A summary of work experience
-    - Education details
-    - Preferred work locations if mentioned
-    - Previous companies worked at
-    
-    Resume content:
-    ${content}
-    
-    Return the response in this exact JSON format:
+    Analyze this resume text and extract key information. Format the response as JSON with the following structure:
     {
       "skills": ["skill1", "skill2"],
-      "experience": "experience summary",
+      "experience": "brief work history",
       "education": "education summary",
       "preferredLocations": ["location1", "location2"],
       "preferredCompanies": ["company1", "company2"]
     }
+
+    Resume text:
+    ${content}
   `;
 
   try {
@@ -56,16 +47,24 @@ async function processWithGemini(content: string): Promise<ParsedResume> {
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
-    console.log('Gemini response received:', text);
+    console.log('Raw Gemini response:', text);
+
+    // Clean up the response in case it returns markdown
+    const cleanedText = text
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim();
+
+    console.log('Cleaned response:', cleanedText);
     
     // Parse the JSON response
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(cleanedText);
     return {
       skills: parsed.skills || [],
       experience: parsed.experience || '',
-      education: parsed.education,
-      preferredLocations: parsed.preferredLocations,
-      preferredCompanies: parsed.preferredCompanies
+      education: parsed.education || '',
+      preferredLocations: parsed.preferredLocations || [],
+      preferredCompanies: parsed.preferredCompanies || []
     };
   } catch (error) {
     console.error('Error processing with Gemini:', error);
@@ -73,60 +72,25 @@ async function processWithGemini(content: string): Promise<ParsedResume> {
   }
 }
 
-const getAvailableProvider = (): AIProvider => {
-  const geminiKey = Deno.env.get('GEMINI_API_KEY');
-  if (!geminiKey) {
-    throw new Error('No AI provider available - GEMINI_API_KEY not found');
-  }
-
-  return {
-    name: 'gemini',
-    apiKey: geminiKey,
-    processResume: processWithGemini
-  };
-};
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { resumeUrl, userId, resumeId } = await req.json();
-    console.log('Processing resume for user:', userId);
+    console.log('Parsing request body...');
+    const { resumeText } = await req.json();
     
-    // Get the resume content
-    console.log('Fetching resume from URL:', resumeUrl);
-    const response = await fetch(resumeUrl);
-    const resumeContent = await response.text();
-    console.log('Resume content length:', resumeContent.length);
+    if (!resumeText) {
+      throw new Error('No resume text provided');
+    }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const supabase = createClient(supabaseUrl!, supabaseKey!);
+    console.log('Resume text length:', resumeText.length);
+    console.log('Sample of resume text:', resumeText.substring(0, 100) + '...');
 
-    // Get available AI provider
-    const provider = getAvailableProvider();
-    console.log('Using AI provider:', provider.name);
-
-    // Process the resume
-    const parsedResume = await provider.processResume(resumeContent);
-    console.log('Parsed resume:', parsedResume);
-
-    // Update resume record with extracted information
-    const { error: updateError } = await supabase
-      .from('resumes')
-      .update({
-        status: 'processed',
-        extracted_skills: parsedResume.skills,
-        experience: parsedResume.experience,
-        preferred_locations: parsedResume.preferredLocations || [],
-        preferred_companies: parsedResume.preferredCompanies || []
-      })
-      .eq('id', resumeId);
-
-    if (updateError) throw updateError;
+    // Process the resume with Gemini
+    const parsedResume = await processWithGemini(resumeText);
+    console.log('Successfully parsed resume:', parsedResume);
 
     return new Response(
       JSON.stringify({ success: true, data: parsedResume }),
