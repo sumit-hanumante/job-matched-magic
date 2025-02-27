@@ -32,23 +32,28 @@ async function processWithGemini(content: string): Promise<ParsedResume> {
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const prompt = `
-    Analyze this resume text and extract key information. Format the response as JSON with the following structure:
+    You are a resume parser. Analyze this resume text and extract the following information:
+    1. All technical and soft skills mentioned
+    2. A brief summary of work experience
+    3. Education details
+    4. Any preferred work locations mentioned
+    5. List of companies worked at
+
+    Format your response as a JSON object with these exact keys:
     {
-      "skills": ["skill1", "skill2"],
-      "experience": "brief work history",
-      "education": "education summary",
-      "preferredLocations": ["location1", "location2"],
-      "preferredCompanies": ["company1", "company2"]
+      "skills": ["Array of all skills found"],
+      "experience": "Brief summary of work experience",
+      "education": "Education summary",
+      "preferredLocations": ["Array of locations found"],
+      "preferredCompanies": ["Array of companies worked at"]
     }
 
-    Resume text:
+    Resume text to analyze:
     ${content}
   `;
 
-  console.log('Prompt sent to Gemini:', prompt.substring(0, 500) + '...');
-
   try {
-    console.log('Sending request to Gemini...');
+    console.log('Sending request to Gemini with prompt length:', prompt.length);
     const result = await model.generateContent(prompt);
     console.log('Received response from Gemini');
     
@@ -69,11 +74,11 @@ async function processWithGemini(content: string): Promise<ParsedResume> {
     console.log('Parsed JSON:', JSON.stringify(parsed, null, 2));
 
     const formattedResponse = {
-      skills: parsed.skills || [],
-      experience: parsed.experience || '',
-      education: parsed.education || '',
-      preferredLocations: parsed.preferredLocations || [],
-      preferredCompanies: parsed.preferredCompanies || []
+      skills: Array.isArray(parsed.skills) ? parsed.skills : [],
+      experience: typeof parsed.experience === 'string' ? parsed.experience : '',
+      education: typeof parsed.education === 'string' ? parsed.education : '',
+      preferredLocations: Array.isArray(parsed.preferredLocations) ? parsed.preferredLocations : [],
+      preferredCompanies: Array.isArray(parsed.preferredCompanies) ? parsed.preferredCompanies : []
     };
 
     console.log('Final formatted response:', JSON.stringify(formattedResponse, null, 2));
@@ -106,7 +111,18 @@ serve(async (req) => {
       throw new Error('No resume text provided');
     }
 
-    const parsedResume = await processWithGemini(resumeText);
+    // Clean up the input text
+    const cleanedText = resumeText
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Remove control characters
+      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+      .trim();
+
+    console.log('Cleaned input text:', {
+      length: cleanedText.length,
+      sample: cleanedText.substring(0, 200) + '...'
+    });
+
+    const parsedResume = await processWithGemini(cleanedText);
     console.log('Parse resume function completed successfully');
     console.log('=========== PARSE RESUME FUNCTION END ===========');
 

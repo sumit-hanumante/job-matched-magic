@@ -18,8 +18,9 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
       // For PDF files
       if (file.type === 'application/pdf') {
         console.log('Processing PDF file...');
-        const arrayBuffer = await file.arrayBuffer();
-        text = new TextDecoder().decode(arrayBuffer);
+        // Convert the file to a Blob and then read as text
+        const blob = new Blob([file], { type: 'text/plain' });
+        text = await blob.text();
         console.log('PDF text extracted, length:', text.length);
         console.log('First 200 characters:', text.substring(0, 200));
       }
@@ -37,6 +38,15 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
       if (!text || text.length === 0) {
         throw new Error('No text could be extracted from the file');
       }
+
+      // Clean up the extracted text
+      text = text
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Remove control characters
+        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+        .trim();
+
+      console.log('Cleaned text sample:', text.substring(0, 500));
+      console.log('Total text length after cleaning:', text.length);
 
       return text;
     } catch (error) {
@@ -77,7 +87,10 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
         return;
       }
 
-      console.log('Authenticated user, proceeding with upload...');
+      // For now, let's try with raw text as a fallback
+      const fileText = await file.text();
+      console.log('Raw file text length:', fileText.length);
+      console.log('Raw file text sample:', fileText.substring(0, 500));
 
       // Upload file to storage
       const fileExt = file.name.split('.').pop();
@@ -92,12 +105,18 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
       if (uploadError) throw uploadError;
       console.log('File uploaded successfully to storage');
 
-      // Extract text from file
-      console.log('Starting text extraction...');
-      const resumeText = await extractTextFromFile(file);
-      console.log('Text extraction completed:', {
-        textLength: resumeText.length,
-        sample: resumeText.substring(0, 100) + '...'
+      // Try to extract text
+      let resumeText = fileText;
+      try {
+        console.log('Attempting structured text extraction...');
+        resumeText = await extractTextFromFile(file);
+      } catch (extractError) {
+        console.warn('Structured extraction failed, using raw text:', extractError);
+      }
+
+      console.log('Final text to be processed:', {
+        length: resumeText.length,
+        sample: resumeText.substring(0, 300)
       });
 
       // Parse the resume using the edge function
