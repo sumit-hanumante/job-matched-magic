@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Github, Linkedin, Globe, MapPin, Briefcase } from "lucide-react";
+import { Github, Linkedin, Globe, MapPin, Briefcase, GraduationCap, User, Tag, Calendar, Award } from "lucide-react";
 
 interface UserPreferences {
   job_alerts: boolean;
@@ -20,10 +20,21 @@ interface UserPreferences {
   portfolio_url: string | null;
 }
 
+interface ResumeData {
+  id: string;
+  file_name: string;
+  extracted_skills: string[];
+  experience: string;
+  preferred_locations: string[];
+  preferred_companies: string[];
+  created_at: string;
+}
+
 const Profile = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+  const [resumeData, setResumeData] = useState<ResumeData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -32,17 +43,18 @@ const Profile = () => {
       return;
     }
 
-    const fetchPreferences = async () => {
+    const fetchData = async () => {
       try {
-        const { data, error } = await supabase
+        // Fetch user preferences
+        const { data: prefsData, error: prefsError } = await supabase
           .from('user_preferences')
           .select('*')
           .eq('id', user.id)
           .maybeSingle();
 
-        if (error) throw error;
+        if (prefsError) throw prefsError;
         
-        if (!data) {
+        if (!prefsData) {
           const defaultPreferences: Partial<UserPreferences> = {
             job_alerts: true,
             preferred_job_types: ['software_development'],
@@ -59,10 +71,23 @@ const Profile = () => {
           if (insertError) throw insertError;
           setPreferences(newData);
         } else {
-          setPreferences(data);
+          setPreferences(prefsData);
         }
+
+        // Fetch resume data
+        const { data: resumeData, error: resumeError } = await supabase
+          .from('resumes')
+          .select('id, file_name, extracted_skills, experience, preferred_locations, preferred_companies, created_at')
+          .eq('user_id', user.id)
+          .order('order_index', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (resumeError) throw resumeError;
+        setResumeData(resumeData);
+
       } catch (error) {
-        console.error('Error fetching preferences:', error);
+        console.error('Error fetching data:', error);
         toast({
           title: "Error",
           description: "Failed to load profile data. Please try again.",
@@ -73,7 +98,7 @@ const Profile = () => {
       }
     };
 
-    fetchPreferences();
+    fetchData();
   }, [user, navigate]);
 
   const updatePreferences = async (updates: Partial<UserPreferences>) => {
@@ -102,6 +127,32 @@ const Profile = () => {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  // Extract professional title from experience (this is a simple implementation)
+  const extractProfessionalTitle = () => {
+    if (!resumeData?.experience) return '';
+    
+    // Look for common job title patterns (this is a simplified approach)
+    const titleRegex = /(software engineer|developer|designer|manager|architect|consultant|analyst|specialist|director)/i;
+    const match = resumeData.experience.match(titleRegex);
+    return match ? match[0].charAt(0).toUpperCase() + match[0].slice(1) : '';
+  };
+
+  // Extract summary from experience (simplified)
+  const extractSummary = () => {
+    if (!resumeData?.experience) return '';
+    
+    // Get first 150 characters as a simple summary
+    return resumeData.experience.substring(0, 150) + (resumeData.experience.length > 150 ? '...' : '');
+  };
+
   if (!user) return null;
 
   if (isLoading) {
@@ -112,19 +163,37 @@ const Profile = () => {
     );
   }
 
+  const professionalTitle = extractProfessionalTitle();
+  const summary = extractSummary();
+
   return (
     <div className="container max-w-4xl mx-auto px-4 py-6 md:py-8 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 md:mb-8">
-        <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-primary/10 flex items-center justify-center shadow-sm mx-auto sm:mx-0">
-          <span className="text-xl md:text-2xl font-semibold text-primary">
+      <div className="flex flex-col items-center sm:flex-row sm:items-center gap-4 mb-6 md:mb-8">
+        <div className="h-20 w-20 md:h-24 md:w-24 rounded-full bg-primary/10 flex items-center justify-center shadow-sm">
+          <span className="text-2xl md:text-3xl font-semibold text-primary">
             {user.user_metadata?.full_name?.[0] || user.email?.[0]?.toUpperCase()}
           </span>
         </div>
         <div className="text-center sm:text-left">
           <h1 className="text-xl md:text-2xl font-bold">{user.user_metadata?.full_name || 'User'}</h1>
-          <p className="text-sm md:text-base text-muted-foreground">{user.email}</p>
+          {professionalTitle && (
+            <p className="text-base md:text-lg text-primary font-medium mt-1">{professionalTitle}</p>
+          )}
+          <p className="text-sm text-muted-foreground mt-1">{user.email}</p>
         </div>
       </div>
+
+      {summary && (
+        <Card className="shadow-card overflow-hidden border-slate-200 mb-4 md:mb-6">
+          <CardContent className="p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <User className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold">Professional Summary</h2>
+            </div>
+            <p className="text-sm md:text-base text-muted-foreground">{summary}</p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="space-y-4 md:space-y-6">
         <Card className="shadow-card overflow-hidden border-slate-200">
@@ -148,6 +217,24 @@ const Profile = () => {
             </Select>
           </CardContent>
         </Card>
+
+        {resumeData?.extracted_skills && resumeData.extracted_skills.length > 0 && (
+          <Card className="shadow-card overflow-hidden border-slate-200">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Tag className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-semibold">Core Skills</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {resumeData.extracted_skills.map((skill, index) => (
+                  <div key={index} className="bg-primary/10 text-primary font-medium px-3 py-1 rounded-full text-sm">
+                    {skill}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="shadow-card overflow-hidden border-slate-200">
           <CardContent className="p-4 md:p-6">
@@ -178,7 +265,7 @@ const Profile = () => {
               <div>
                 <Label className="text-sm font-medium mb-1.5 block">Location Preference</Label>
                 <Select
-                  value={preferences?.preferred_locations?.[0]}
+                  value={resumeData?.preferred_locations?.[0] || preferences?.preferred_locations?.[0]}
                   onValueChange={(value) => updatePreferences({ preferred_locations: [value] })}
                 >
                   <SelectTrigger className="w-full text-base py-2.5">
@@ -195,6 +282,39 @@ const Profile = () => {
             </div>
           </CardContent>
         </Card>
+
+        {resumeData && (
+          <Card className="shadow-card overflow-hidden border-slate-200">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-semibold">Resume Information</h2>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Resume File:</span>
+                  <span className="font-medium">{resumeData.file_name}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Uploaded on:</span>
+                  <span className="font-medium">{formatDate(resumeData.created_at)}</span>
+                </div>
+                {resumeData.preferred_companies && resumeData.preferred_companies.length > 0 && (
+                  <div>
+                    <span className="text-muted-foreground block mb-1">Preferred Companies:</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {resumeData.preferred_companies.map((company, index) => (
+                        <span key={index} className="bg-secondary/60 px-2 py-1 rounded text-xs">
+                          {company}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="shadow-card overflow-hidden border-slate-200">
           <CardContent className="p-4 md:p-6">
