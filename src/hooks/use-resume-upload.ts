@@ -28,7 +28,15 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
         body: { pdfBase64: base64String }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error('PDF extraction error (supabase):', error);
+        throw error;
+      }
+      
+      if (!data || !data.text) {
+        console.error('No text returned from PDF extraction');
+        throw new Error('No text extracted from PDF');
+      }
       
       console.log('PDF text extracted successfully:', {
         textLength: data.text.length,
