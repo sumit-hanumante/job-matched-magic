@@ -136,6 +136,8 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
 
       // Parse the resume using the edge function
       console.log('Sending text to parse-resume function...');
+      console.log('Resume text being sent (first 1000 chars):', resumeText.substring(0, 1000));
+      
       const { data: parseResponse, error: parseError } = await supabase.functions.invoke('parse-resume', {
         body: { resumeText }
       });
@@ -145,25 +147,37 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
         throw parseError;
       }
 
-      console.log('Resume parsed successfully:', parseResponse);
+      // Log detailed Gemini response
+      console.log('=============== GEMINI RESPONSE START ===============');
+      console.log('Full Gemini response:', JSON.stringify(parseResponse, null, 2));
+      console.log('Skills:', parseResponse?.data?.skills);
+      console.log('Experience:', parseResponse?.data?.experience);
+      console.log('Education:', parseResponse?.data?.education);
+      console.log('Preferred Locations:', parseResponse?.data?.preferredLocations);
+      console.log('Preferred Companies:', parseResponse?.data?.preferredCompanies);
+      console.log('=============== GEMINI RESPONSE END ===============');
 
       await shiftResumes(user.id);
 
       console.log('Inserting resume record into database...');
-      const { error: insertError } = await supabase
+      const resumeData = {
+        user_id: user.id,
+        file_name: file.name,
+        file_path: filePath,
+        content_type: file.type,
+        status: 'processed',
+        order_index: 1,
+        extracted_skills: parseResponse?.data?.skills || [],
+        experience: parseResponse?.data?.experience || '',
+        preferred_locations: parseResponse?.data?.preferredLocations || [],
+        preferred_companies: parseResponse?.data?.preferredCompanies || []
+      };
+      
+      console.log('Resume data to be inserted:', JSON.stringify(resumeData, null, 2));
+      
+      const { data: insertedResume, error: insertError } = await supabase
         .from('resumes')
-        .insert({
-          user_id: user.id,
-          file_name: file.name,
-          file_path: filePath,
-          content_type: file.type,
-          status: 'processed',
-          order_index: 1,
-          extracted_skills: parseResponse?.data?.skills || [],
-          experience: parseResponse?.data?.experience || '',
-          preferred_locations: parseResponse?.data?.preferredLocations || [],
-          preferred_companies: parseResponse?.data?.preferredCompanies || []
-        })
+        .insert(resumeData)
         .select()
         .single();
 
@@ -173,6 +187,25 @@ export const useResumeUpload = (user: any, onLoginRequired?: (email?: string, fu
           .from('resumes')
           .remove([filePath]);
         throw insertError;
+      }
+
+      console.log('Resume inserted successfully:', JSON.stringify(insertedResume, null, 2));
+      
+      // Verify data was saved correctly by fetching it again
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('resumes')
+        .select('*')
+        .eq('id', insertedResume.id)
+        .single();
+        
+      if (verifyError) {
+        console.error('Verification query failed:', verifyError);
+      } else {
+        console.log('Verification of saved data:', JSON.stringify(verifyData, null, 2));
+        console.log('Saved skills:', verifyData.extracted_skills);
+        console.log('Saved experience:', verifyData.experience);
+        console.log('Saved locations:', verifyData.preferred_locations);
+        console.log('Saved companies:', verifyData.preferred_companies);
       }
 
       console.log('Resume upload process completed successfully');
