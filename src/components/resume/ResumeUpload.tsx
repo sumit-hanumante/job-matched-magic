@@ -12,8 +12,7 @@ interface ResumeUploadProps {
 
 const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isParsing, setIsParsing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [currentResume, setCurrentResume] = useState<{
     filename?: string;
@@ -25,6 +24,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
 
+  // Fetch the latest resume on user login
   useEffect(() => {
     if (user) {
       fetchCurrentResume();
@@ -33,37 +33,37 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
 
   const fetchCurrentResume = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
-        .from('resumes')
-        .select('id, file_name, status, created_at, file_path')
-        .eq('user_id', user.id)
-        .order('order_index', { ascending: true })
+        .from("resumes")
+        .select("id, file_name, status, created_at, file_path")
+        .eq("user_id", user.id)
+        .order("order_index", { ascending: true })
         .limit(1)
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching resume:', error);
+        console.error("Error fetching resume:", error);
         return;
       }
 
       if (data) {
-        setCurrentResume({
-          id: data.id,
-          filename: data.file_name,
-          status: data.status,
-          uploaded_at: new Date(data.created_at).toLocaleDateString(),
-          file_path: data.file_path
-        });
+        // Update local state with parsed data
+        setCurrentResume(prev => ({
+          ...prev,
+          status: 'parsed',
+          // parsedData // Add this to your state interface if needed
+        }));
       } else {
         setCurrentResume(null);
       }
     } catch (error) {
-      console.error('Error fetching resume:', error);
+      console.error("Error fetching resume:", error);
     }
   };
 
+  // Handle drag-and-drop events
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -78,8 +78,22 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     setIsDragging(false);
 
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && (droppedFile.type === "application/pdf" || droppedFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-      setFile(droppedFile);
+    validateAndSetFile(droppedFile);
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    validateAndSetFile(selectedFile);
+  };
+
+  const validateAndSetFile = (selectedFile?: File) => {
+    if (
+      selectedFile &&
+      (selectedFile.type === "application/pdf" ||
+        selectedFile.type ===
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    ) {
+      setFile(selectedFile);
     } else {
       toast({
         variant: "destructive",
@@ -89,20 +103,14 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile && (selectedFile.type === "application/pdf" || selectedFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-      setFile(selectedFile);
-    }
-  };
-
+  // Shift existing resumes to maintain a maximum of 3
   const shiftResumes = async (userId: string) => {
     try {
       const { data: resumes, error: fetchError } = await supabase
-        .from('resumes')
-        .select('id, order_index')
-        .eq('user_id', userId)
-        .order('order_index', { ascending: true });
+        .from("resumes")
+        .select("id, order_index")
+        .eq("user_id", userId)
+        .order("order_index", { ascending: true });
 
       if (fetchError) throw fetchError;
 
@@ -111,147 +119,182 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           const newIndex = resume.order_index + 1;
           if (newIndex <= 3) {
             await supabase
-              .from('resumes')
+              .from("resumes")
               .update({ order_index: newIndex })
-              .eq('id', resume.id);
+              .eq("id", resume.id);
           } else {
-            await supabase
-              .from('resumes')
-              .delete()
-              .eq('id', resume.id);
+            await supabase.from("resumes").delete().eq("id", resume.id);
           }
         }
       }
     } catch (error) {
-      console.error('Error shifting resumes:', error);
+      console.error("Error shifting resumes:", error);
       throw error;
     }
   };
 
+  // Upload and process the resume
   const uploadResume = async () => {
     if (!file) return;
 
-    try {
-      setIsUploading(true);
-      console.log('Starting resume upload...');
+    setIsProcessing(true);
+    console.log("Starting resume upload and processing...");
 
+    try {
       if (!user) {
+        // Handle unauthenticated upload
         const tempFileName = `${crypto.randomUUID()}-${file.name}`;
         const { error: uploadError, data } = await supabase.storage
-          .from('temp-resumes')
+          .from("temp-resumes")
           .upload(tempFileName, file);
 
         if (uploadError) throw uploadError;
-
         const { data: { publicUrl } } = supabase.storage
-          .from('temp-resumes')
+          .from("temp-resumes")
           .getPublicUrl(data.path);
 
-        if (onLoginRequired) {
-          onLoginRequired();
-        }
+        if (onLoginRequired) onLoginRequired();
 
         toast({
           title: "File uploaded successfully",
-          description: "Please create an account to analyze your resume and get job matches.",
+          description:
+            "Please create an account to analyze your resume and get job matches.",
         });
 
-        setFile(null);
-        const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
-
+        resetFileInput();
         return;
       }
 
-      console.log('Authenticated user, proceeding with upload...');
+      // Authenticated user flow
+      console.log("Uploading resume for authenticated user...");
       await shiftResumes(user.id);
 
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
+      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
-        .from('resumes')
+        .from("resumes")
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
+      console.log(`File uploaded to: ${filePath}`);
+
+      // Insert resume metadata into database
       const { error: insertError, data: resumeData } = await supabase
-        .from('resumes')
+        .from("resumes")
         .insert({
           user_id: user.id,
           file_name: file.name,
           file_path: filePath,
           content_type: file.type,
-          status: 'uploaded',
-          order_index: 1
+          status: "uploaded",
+          order_index: 1,
         })
         .select()
         .single();
 
       if (insertError) {
-        await supabase.storage
-          .from('resumes')
-          .remove([filePath]);
+        await supabase.storage.from("resumes").remove([filePath]);
         throw insertError;
       }
 
       const { data: { publicUrl } } = supabase.storage
-        .from('resumes')
+        .from("resumes")
         .getPublicUrl(filePath);
 
-      setIsParsing(true);
+        console.log("Generated public URL:", publicUrl); // Add this line
+
       toast({
-        title: "Resume uploaded successfully",
-        description: "Starting resume analysis...",
+        title: "Resume uploaded",
+        description: "Analyzing your resume...",
       });
 
-      // Call the parse-resume function
-      const { error: parseError } = await supabase.functions.invoke('parse-resume', {
-        body: { 
-          resumeUrl: publicUrl,
-          userId: user.id,
-          resumeId: resumeData.id
-        }
-      });
+      // Invoke server-side parsing
+      console.log("Invoking parse-resume function with URL:", publicUrl);
+      console.log("Public URL being sent:", publicUrl);
+if (!publicUrl) {
+  console.error("Public URL is empty! Check your Supabase storage configuration.");
+  toast({
+    variant: "destructive",
+    title: "Upload Failed",
+    description: "The public URL could not be generated. Please check your Supabase storage settings.",
+  });
+  setIsProcessing(false);
+  return; // Stop the upload process
+}
 
+const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
+  method: "POST",
+  body: JSON.stringify({ resumeUrl: publicUrl }),
+  headers: { "Content-Type": "application/json" },
+});
+
+      
+      
+      
       if (parseError) {
         throw parseError;
       }
 
+      console.log("Parse response:", parseData);
+      
+
+      if (!parseData.success) {
+        throw new Error(parseData.error || "Failed to parse resume");
+      }
+      // Store parsed data in local state instead of DB
+      const parsedData = parseData.data;
       toast({
         title: "Resume analyzed successfully",
-        description: "Your resume has been processed and your job matches will be updated.",
+        description: "Your resume has been processed!",
       });
 
-      setFile(null);
-      const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
-      
+      // Update resume status
+      await supabase
+        .from("resumes")
+        .update({ status: "parsed" })
+        .eq("id", resumeData.id);
+
+      toast({
+        title: "Resume analyzed",
+        description: "Your resume has been processed successfully.",
+      });
+
+      resetFileInput();
       await fetchCurrentResume();
-      
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error("Error during upload/parsing:", error);
       toast({
         variant: "destructive",
-        title: "Upload failed",
-        description: error instanceof Error ? error.message : "An error occurred while uploading your resume",
+        title: "Processing failed",
+        description:
+          error instanceof Error ? error.message : "An error occurred",
       });
     } finally {
-      setIsUploading(false);
-      setIsParsing(false);
+      setIsProcessing(false);
     }
+  };
+
+  const resetFileInput = () => {
+    setFile(null);
+    const fileInput = document.getElementById("file-upload") as HTMLInputElement;
+    if (fileInput) fileInput.value = "";
   };
 
   return (
     <div className="w-full max-w-xl mx-auto">
       {currentResume && (
         <ResumeDisplay
-          filename={currentResume.filename || ''}
-          uploadedAt={currentResume.uploaded_at || ''}
-          status={currentResume.status || ''}
+          filename={currentResume.filename || ""}
+          uploadedAt={currentResume.uploaded_at || ""}
+          status={currentResume.status || ""}
           onUpdateClick={() => {
-            const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+            const fileInput = document.getElementById(
+              "file-upload"
+            ) as HTMLInputElement;
             if (fileInput) fileInput.click();
           }}
         />
@@ -270,7 +313,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       {file && (
         <ResumeUploadForm
           file={file}
-          isUploading={isUploading || isParsing}
+          isUploading={isProcessing}
           onUpload={uploadResume}
           isAuthenticated={!!user}
         />
