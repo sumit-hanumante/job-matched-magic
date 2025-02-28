@@ -113,22 +113,22 @@ const Profile = () => {
   }
 
   return (
-    <div className="container max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center gap-4 mb-8">
-        <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center">
-          <span className="text-2xl font-semibold text-primary">
+    <div className="container max-w-4xl mx-auto px-4 py-6 md:py-8 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 md:mb-8">
+        <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-primary/10 flex items-center justify-center shadow-sm mx-auto sm:mx-0">
+          <span className="text-xl md:text-2xl font-semibold text-primary">
             {user.user_metadata?.full_name?.[0] || user.email?.[0]?.toUpperCase()}
           </span>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">{user.user_metadata?.full_name || 'User'}</h1>
-          <p className="text-muted-foreground">{user.email}</p>
+        <div className="text-center sm:text-left">
+          <h1 className="text-xl md:text-2xl font-bold">{user.user_metadata?.full_name || 'User'}</h1>
+          <p className="text-sm md:text-base text-muted-foreground">{user.email}</p>
         </div>
       </div>
 
-      <div className="space-y-6">
-        <Card>
-          <CardContent className="pt-6">
+      <div className="space-y-4 md:space-y-6">
+        <Card className="shadow-card overflow-hidden border-slate-200">
+          <CardContent className="p-4 md:p-6">
             <div className="flex items-center gap-2 mb-4">
               <Briefcase className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-semibold">Job Search Status</h2>
@@ -137,7 +137,7 @@ const Profile = () => {
               value={preferences?.job_search_status}
               onValueChange={(value) => updatePreferences({ job_search_status: value })}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full text-base py-2.5">
                 <SelectValue placeholder="Select your job search status" />
               </SelectTrigger>
               <SelectContent>
@@ -149,20 +149,20 @@ const Profile = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
+        <Card className="shadow-card overflow-hidden border-slate-200">
+          <CardContent className="p-4 md:p-6">
             <div className="flex items-center gap-2 mb-4">
               <MapPin className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-semibold">Work Preferences</h2>
             </div>
             <div className="space-y-4">
               <div>
-                <Label>Field of Work</Label>
+                <Label className="text-sm font-medium mb-1.5 block">Field of Work</Label>
                 <Select
                   value={preferences?.preferred_job_types?.[0]}
                   onValueChange={(value) => updatePreferences({ preferred_job_types: [value] })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full text-base py-2.5">
                     <SelectValue placeholder="Select your field" />
                   </SelectTrigger>
                   <SelectContent>
@@ -176,12 +176,12 @@ const Profile = () => {
               </div>
 
               <div>
-                <Label>Location Preference</Label>
+                <Label className="text-sm font-medium mb-1.5 block">Location Preference</Label>
                 <Select
                   value={preferences?.preferred_locations?.[0]}
                   onValueChange={(value) => updatePreferences({ preferred_locations: [value] })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full text-base py-2.5">
                     <SelectValue placeholder="Select location preference" />
                   </SelectTrigger>
                   <SelectContent>
@@ -196,18 +196,21 @@ const Profile = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
+        <Card className="shadow-card overflow-hidden border-slate-200">
+          <CardContent className="p-4 md:p-6">
             <div className="flex items-center gap-2 mb-4">
               <Globe className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-semibold">Professional Profiles</h2>
             </div>
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Linkedin className="w-5 h-5 text-primary" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex items-center gap-2 sm:w-40">
+                  <Linkedin className="w-5 h-5 text-primary" />
+                  <Label className="font-medium">LinkedIn</Label>
+                </div>
                 <div className="flex-1">
-                  <Label>LinkedIn Profile</Label>
                   <Input
+                    className="w-full text-base py-2.5"
                     placeholder="https://linkedin.com/in/..."
                     value={preferences?.linkedin_url || ''}
                     onChange={(e) => updatePreferences({ linkedin_url: e.target.value })}
@@ -215,11 +218,14 @@ const Profile = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Github className="w-5 h-5 text-primary" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex items-center gap-2 sm:w-40">
+                  <Github className="w-5 h-5 text-primary" />
+                  <Label className="font-medium">GitHub</Label>
+                </div>
                 <div className="flex-1">
-                  <Label>GitHub Profile</Label>
                   <Input
+                    className="w-full text-base py-2.5"
                     placeholder="https://github.com/..."
                     value={preferences?.github_url || ''}
                     onChange={(e) => updatePreferences({ github_url: e.target.value })}
@@ -227,11 +233,14 @@ const Profile = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-primary" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex items-center gap-2 sm:w-40">
+                  <Globe className="w-5 h-5 text-primary" />
+                  <Label className="font-medium">Portfolio</Label>
+                </div>
                 <div className="flex-1">
-                  <Label>Portfolio Website</Label>
                   <Input
+                    className="w-full text-base py-2.5"
                     placeholder="https://..."
                     value={preferences?.portfolio_url || ''}
                     onChange={(e) => updatePreferences({ portfolio_url: e.target.value })}
