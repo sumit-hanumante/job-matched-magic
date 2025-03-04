@@ -135,7 +135,6 @@ export const useResumeUpload = (
           preferred_companies: data.data?.preferredCompanies || [],
           // Optionally store the extracted text and public URL for future reference.
           resume_text: extractedText,
-          public_url: publicUrl,
         })
         .single();
       if (insertError) {
