@@ -1,7 +1,7 @@
 
 [functions]
 [functions.parse-resume]
-verify_jwt = true
+verify_jwt = false
 
 [functions.scrape-jobs]
 verify_jwt = true
