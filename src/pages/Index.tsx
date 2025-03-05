@@ -6,6 +6,7 @@ import Auth from "@/components/Auth";
 import { useAuth } from "@/components/AuthProvider";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import JobMatches from "@/components/JobMatches";
 
 const Index = () => {
   const { user } = useAuth();
@@ -44,6 +45,12 @@ const Index = () => {
             <ResumeUpload onLoginRequired={handleLoginPrompt} />
           </div>
         </section>
+
+        {user && (
+          <section id="job-matches" className="scroll-mt-16 animate-fade-in">
+            <JobMatches />
+          </section>
+        )}
 
         <section id="jobs" className="scroll-mt-16 animate-fade-in">
           <div className="text-center mb-12">
