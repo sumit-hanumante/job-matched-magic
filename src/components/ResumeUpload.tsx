@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import ResumeDisplay from "./resume/ResumeDisplay";
@@ -6,6 +5,7 @@ import ResumeDropzone from "./resume/ResumeDropzone";
 import ResumeUploadForm from "./resume/ResumeUploadForm";
 import { useResumeUpload } from "@/hooks/use-resume-upload";
 import { fetchCurrentResume } from "@/lib/resume-utils";
+import { useJobMatching } from '@/hooks/use-job-matching';
 
 interface ResumeUploadProps {
   onLoginRequired?: (email?: string, fullName?: string) => void;
@@ -24,6 +24,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   
   const { user } = useAuth();
   const { isUploading, uploadResume } = useResumeUpload(user, onLoginRequired);
+  const { isProcessing, generateJobMatches } = useJobMatching();
 
   useEffect(() => {
     if (user) {
@@ -73,6 +74,10 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       await loadCurrentResume();
+      const resumeId = currentResume?.id;
+      if (resumeId) {
+        generateJobMatches(resumeId);
+      }
     }
   };
 

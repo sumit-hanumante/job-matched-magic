@@ -1,4 +1,3 @@
-
 import { useAuth } from "@/components/AuthProvider";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -9,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Github, Linkedin, Globe, MapPin, Briefcase } from "lucide-react";
+import JobMatches from '@/components/JobMatches';
 
 interface UserPreferences {
   job_alerts: boolean;
@@ -241,6 +241,11 @@ const Profile = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Example addition - adjust based on actual markup */}
+        <section className="mt-8">
+          <JobMatches />
+        </section>
       </div>
     </div>
   );
