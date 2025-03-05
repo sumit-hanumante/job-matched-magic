@@ -107,6 +107,13 @@
 - `scrape-jobs`: Job data collection
 - `cleanup-jobs`: Job database maintenance
 
+### Job Matching System (Updated June 14, 2024)
+- Working on branch: `feature/improved-job-matching`
+- Implemented vector-based job matching using Supabase stored procedures
+- Added comprehensive job matching logic in `src/lib/jobMatcher.ts`
+- Created UI components to display personalized job matches
+- Enhanced resume parsing to extract data in a format optimized for job matching
+
 ## Current Testing Status
 
 ### Tested Functionality
@@ -154,4 +161,3 @@
 3. Develop advanced matching algorithm
 4. Add comprehensive testing suite
 5. Implement monitoring and analytics
-

@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.22.0";
 
@@ -32,10 +33,26 @@ serve(async (req) => {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // 4. Build the prompt using the extracted resume text
+    // 4. Build the prompt using the extracted resume text - Enhanced for job matching
     const prompt = `
-      Analyze the following resume text and extract the candidate’s details.
-      Return JSON with keys: personal_information, summary, skills, experience, education, projects.
+      Analyze the following resume text and extract the candidate's details in a format optimized for job matching.
+      
+      Return a JSON object with these keys:
+      - personal_information (name, email, phone, location)
+      - summary (a brief overview of the candidate)
+      - extracted_skills (an array of technical skills, soft skills, and tools the candidate knows)
+      - experience (detailed work history with company, role, dates, and responsibilities)
+      - education (degrees, institutions, dates)
+      - projects (name, description, technologies used)
+      - preferred_locations (array of locations the candidate prefers to work in, extract from their current location and any mentioned preferences)
+      - preferred_companies (array of company names the candidate has mentioned interest in)
+      - min_salary (extract minimum expected salary if mentioned, as a number without currency symbols)
+      - max_salary (extract maximum expected salary if mentioned, as a number without currency symbols)
+      - preferred_work_type (remote, hybrid, on-site, etc.)
+      
+      Format the skills as a clean array of strings, not nested objects, to enable easier matching with job requirements.
+      Make sure salary values are numeric only (no currency symbols or text).
+      
       Resume text:
       ${resumeText}
     `;
@@ -46,7 +63,7 @@ serve(async (req) => {
     const rawGeminiResponse = await result.response.text();
     console.log("Gemini raw response (first 300 chars) =>", rawGeminiResponse.substring(0, 300) + "...");
     
-    // 6. Attempt to parse Gemini’s response as JSON
+    // 6. Attempt to parse Gemini's response as JSON
     let geminiData;
     try {
       geminiData = JSON.parse(rawGeminiResponse);

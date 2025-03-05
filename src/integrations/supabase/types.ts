@@ -144,6 +144,7 @@ export type Database = {
         Row: {
           content_type: string | null
           created_at: string | null
+          embedding: string | null
           experience: string | null
           extracted_skills: string[] | null
           file_name: string | null
@@ -163,6 +164,7 @@ export type Database = {
         Insert: {
           content_type?: string | null
           created_at?: string | null
+          embedding?: string | null
           experience?: string | null
           extracted_skills?: string[] | null
           file_name?: string | null
@@ -182,6 +184,7 @@ export type Database = {
         Update: {
           content_type?: string | null
           created_at?: string | null
+          embedding?: string | null
           experience?: string | null
           extracted_skills?: string[] | null
           file_name?: string | null
