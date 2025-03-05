@@ -1,14 +1,12 @@
-
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { shiftResumes } from "@/lib/resume-utils";
 import * as pdfjsLib from "pdfjs-dist";
 
-// Update the worker source to match the installed version of pdfjs-dist
-// Using v2.11.338 as it's closer to our likely installed version
+// Update the worker source to match the API version
 pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js";
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
 
 export const useResumeUpload = (
   user: any,
