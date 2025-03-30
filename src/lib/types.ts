@@ -25,6 +25,8 @@ export interface Resume {
   min_salary?: number;
   max_salary?: number;
   preferred_work_type?: string;
+  years_of_experience?: number;
+  possible_job_titles?: string[];
 }
 
 export interface JobMatch {

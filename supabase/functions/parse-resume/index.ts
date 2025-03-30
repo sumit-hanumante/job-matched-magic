@@ -78,7 +78,7 @@ serve(async (req) => {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // 4. Build the prompt using the extracted resume text
+    // 4. Build the prompt using the extracted resume text - UPDATED with new fields
     const prompt = `
       Analyze the following resume text and extract the candidate's details in a format optimized for job matching.
       
@@ -94,9 +94,12 @@ serve(async (req) => {
       - min_salary (extract minimum expected salary if mentioned, as a number without currency symbols)
       - max_salary (extract maximum expected salary if mentioned, as a number without currency symbols)
       - preferred_work_type (remote, hybrid, on-site, etc.)
+      - years_of_experience (total years of professional experience as a number)
+      - possible_job_titles (array of job titles that would be suitable for this candidate based on their skills and experience)
       
       Format the skills as a clean array of strings, not nested objects, to enable easier matching with job requirements.
       Make sure salary values are numeric only (no currency symbols or text).
+      For possible_job_titles, include both current and potential roles they could apply for based on their skills and experience.
       
       Resume text:
       ${resumeText}
