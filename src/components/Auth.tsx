@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,29 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
+  };
+
+  const createUserPreferences = async (userId: string) => {
+    try {
+      const defaultPreferences = {
+        id: userId,
+        job_alerts: true,
+        preferred_job_types: ['software_development'],
+        preferred_locations: ['remote'],
+        job_search_status: 'actively_looking'
+      };
+
+      const { error } = await supabase
+        .from('user_preferences')
+        .insert([defaultPreferences]);
+
+      if (error) {
+        console.error('Error creating user preferences:', error);
+        // We will still allow the registration to proceed even if this fails
+      }
+    } catch (error) {
+      console.error('Exception creating user preferences:', error);
+    }
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -75,6 +99,9 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
       if (error) throw error;
       
       if (data?.user) {
+        // Try to create user preferences
+        await createUserPreferences(data.user.id);
+        
         toast({
           title: "Account created",
           description: "Your account has been created successfully.",
