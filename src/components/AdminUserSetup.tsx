@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { createAdminUser } from "@/scripts/createTestUsers";
+import { supabase } from "@/lib/supabase";
 import { toast } from "@/components/ui/use-toast";
 
 const AdminUserSetup = () => {
@@ -13,36 +13,52 @@ const AdminUserSetup = () => {
     setResult(null);
     
     try {
-      const originalConsoleLog = console.log;
-      const logs: string[] = [];
-      
-      // Override console.log to capture logs
-      console.log = (...args) => {
-        originalConsoleLog(...args);
-        logs.push(args.map(arg => 
-          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg
-        ).join(' '));
-      };
-      
-      const user = await createAdminUser();
-      
-      // Restore original console.log
-      console.log = originalConsoleLog;
-      
-      // Set the captured logs as result
-      setResult(logs.join('\n'));
-      
-      if (user) {
-        toast({
-          title: "Admin User Created",
-          description: "Admin user sumit@example.com was created successfully.",
-        });
+      // First check if user already exists
+      const { data: existingUsers, error: searchError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('email', 'sumit@example.com')
+        .maybeSingle();
+        
+      if (searchError) {
+        throw new Error(`Error checking for existing user: ${searchError.message}`);
       }
+      
+      if (existingUsers) {
+        setResult("Admin user already exists");
+        toast({
+          title: "User Exists",
+          description: "Admin user sumit@example.com already exists.",
+        });
+        return;
+      }
+      
+      // Create admin user
+      const { data: adminUser, error: adminUserError } = await supabase.auth.signUp({
+        email: "sumit@example.com",
+        password: "123456",
+        options: {
+          data: {
+            full_name: "Sumit Admin",
+          },
+        }
+      });
+
+      if (adminUserError) throw adminUserError;
+      
+      setResult(JSON.stringify(adminUser, null, 2));
+      
+      toast({
+        title: "Admin User Created",
+        description: "Admin user sumit@example.com was created successfully.",
+      });
+      
     } catch (error) {
-      setResult(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setResult(`Error: ${errorMessage}`);
       toast({
         title: "Error Creating Admin User",
-        description: `${error instanceof Error ? error.message : String(error)}`,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
