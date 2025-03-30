@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -21,9 +20,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     uploaded_at?: string;
     id?: string;
     file_path?: string;
-    is_primary?: boolean;
-    total_years_experience?: number | null;
-    possible_job_titles?: string[] | null;
   } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -40,7 +36,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     try {
       const { data, error } = await supabase
         .from("resumes")
-        .select("id, file_name, status, created_at, file_path, order_index, total_years_experience, possible_job_titles")
+        .select("id, file_name, status, created_at, file_path")
         .eq("user_id", user.id)
         .order("order_index", { ascending: true })
         .limit(1)
@@ -52,16 +48,10 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       }
 
       if (data) {
-        setCurrentResume({
-          id: data.id,
-          filename: data.file_name,
-          status: data.status || 'parsed',
-          uploaded_at: new Date(data.created_at).toLocaleDateString(),
-          file_path: data.file_path,
-          is_primary: data.order_index === 1,
-          total_years_experience: data.total_years_experience,
-          possible_job_titles: data.possible_job_titles
-        });
+        setCurrentResume(prev => ({
+          ...prev,
+          status: 'parsed',
+        }));
       } else {
         setCurrentResume(null);
       }
@@ -278,9 +268,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           filename={currentResume.filename || ""}
           uploadedAt={currentResume.uploaded_at || ""}
           status={currentResume.status || ""}
-          totalYearsExperience={currentResume.total_years_experience}
-          possibleJobTitles={currentResume.possible_job_titles}
-          isPrimary={currentResume.is_primary}
           onUpdateClick={() => {
             const fileInput = document.getElementById(
               "file-upload"
