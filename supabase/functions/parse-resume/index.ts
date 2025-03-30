@@ -43,6 +43,15 @@ serve(async (req) => {
         console.log("URL provided:", body.resumeUrl);
         throw new Error("Direct text extraction is required. URL-based extraction is no longer supported.");
       }
+
+      // Handle test requests
+      if (body.test === true) {
+        console.log("Received test request, returning success");
+        return new Response(
+          JSON.stringify({ success: true, message: "Edge function is working properly" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     } catch (parseError) {
       console.error("JSON parsing error:", parseError);
       console.error("Raw body:", rawBody.substring(0, 500) + "..."); // Log first 500 chars for debugging
@@ -128,7 +137,9 @@ serve(async (req) => {
         preferred_locations: [],
         preferred_companies: [],
         personal_information: {},
-        summary: "Failed to parse resume automatically. Raw text saved."
+        summary: "Failed to parse resume automatically. Raw text saved.",
+        possible_job_titles: [],
+        years_of_experience: null
       };
     }
     
