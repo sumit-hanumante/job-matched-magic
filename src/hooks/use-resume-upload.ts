@@ -238,6 +238,8 @@ export const useResumeUpload = (
         if (responseData.data) {
           console.log("Parsed data keys:", Object.keys(responseData.data));
           parsedData = responseData.data;
+          console.log("Extracted skills from API:", parsedData.extracted_skills?.length || 0);
+          console.log("First few skills:", parsedData.extracted_skills?.slice(0, 5));
         } else {
           console.warn("No data returned from parse function");
         }
@@ -278,9 +280,17 @@ export const useResumeUpload = (
         });
       }
       
-      const { error: insertError } = await supabase
+      console.log("Resume data to be inserted:", JSON.stringify({
+        ...resumeData,
+        resume_text: `${extractedText.substring(0, 100)}... (truncated)`,
+        extracted_skills: resumeData.extracted_skills || []
+      }, null, 2));
+
+      const { error: insertError, data: insertedResume } = await supabase
         .from("resumes")
-        .insert(resumeData);
+        .insert(resumeData)
+        .select()
+        .single();
         
       if (insertError) {
         console.error("Database insert failed:", insertError);
@@ -290,6 +300,8 @@ export const useResumeUpload = (
       }
 
       console.log("Resume upload process completed successfully");
+      console.log("Inserted resume data:", insertedResume);
+      
       toast({
         title: "Resume uploaded successfully",
         description: parsedData 

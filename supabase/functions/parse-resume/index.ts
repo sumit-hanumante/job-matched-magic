@@ -77,8 +77,14 @@ serve(async (req) => {
           success: true,
           data: {
             resume_text: resumeText, // Just return the raw text
+            extracted_skills: [],
             years_of_experience: null,
             possible_job_titles: [],
+            preferred_locations: [],
+            preferred_companies: [],
+            min_salary: null,
+            max_salary: null,
+            preferred_work_type: null
           },
           message: "GEMINI_API_KEY is missing, saving raw text only."
         }),
@@ -130,6 +136,8 @@ serve(async (req) => {
       // Remove markdown code blocks if present and parse JSON
       parsedData = JSON.parse(rawGeminiResponse.replace(/```json|```/g, '').trim());
       console.log("Successfully parsed JSON response");
+      console.log("Extracted skills count:", parsedData.extracted_skills?.length || 0);
+      console.log("Possible job titles:", parsedData.possible_job_titles?.join(', ') || 'none');
     } catch (parseErr) {
       console.error("Failed to parse Gemini response as JSON:", parseErr);
       console.log("Raw Gemini response:", rawGeminiResponse);
