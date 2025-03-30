@@ -21,10 +21,26 @@ serve(async (req) => {
     console.log("Raw request body length =>", rawBody.length);
 
     // 2. Parse JSON expecting 'resumeText'
-    const { resumeText } = JSON.parse(rawBody);
+    let resumeText;
+    try {
+      const body = JSON.parse(rawBody);
+      resumeText = body.resumeText;
+      
+      // Handle case where resumeUrl might be sent instead
+      if (!resumeText && body.resumeUrl) {
+        console.log("No resumeText found but resumeUrl was provided. This is not supported anymore.");
+        console.log("URL provided:", body.resumeUrl);
+        throw new Error("Direct text extraction is required. URL-based extraction is no longer supported.");
+      }
+      
+      console.log("Request body format => ", Object.keys(body).join(', '));
+    } catch (parseError) {
+      console.error("JSON parsing error:", parseError);
+      throw new Error(`Failed to parse request JSON: ${parseError.message}`);
+    }
     
     if (!resumeText) {
-      throw new Error("No resume text provided");
+      throw new Error("No resume text provided in the request body");
     }
     
     console.log("Parsed resumeText length =>", resumeText.length);
@@ -33,6 +49,11 @@ serve(async (req) => {
     // 3. Initialize Gemini
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || "";
     console.log("Gemini API Key present:", !!geminiApiKey);
+    
+    if (!geminiApiKey) {
+      console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
+      throw new Error("Missing GEMINI_API_KEY in environment");
+    }
     
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -72,15 +93,16 @@ serve(async (req) => {
     // 6. Attempt to parse Gemini's response as JSON
     let parsedData;
     try {
+      // Remove markdown code blocks if present and parse JSON
       parsedData = JSON.parse(rawGeminiResponse.replace(/```json|```/g, '').trim());
       console.log("Successfully parsed JSON response");
     } catch (parseErr) {
       console.error("Failed to parse Gemini response as JSON:", parseErr);
+      console.log("Raw Gemini response:", rawGeminiResponse);
       parsedData = { 
         extracted_skills: [],
         preferred_locations: [],
         preferred_companies: [],
-        raw_text: resumeText // Store the raw text as fallback
       };
     }
     

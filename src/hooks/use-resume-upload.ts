@@ -22,45 +22,72 @@ export const useResumeUpload = (
     try {
       console.log("Starting PDF text extraction");
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      console.log(`PDF loaded, pages: ${pdf.numPages}`);
+      console.log(`PDF buffer created, size: ${arrayBuffer.byteLength} bytes`);
+      
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      console.log("PDF loading task created");
+      
+      const pdf = await loadingTask.promise;
+      console.log(`PDF loaded successfully, pages: ${pdf.numPages}`);
       
       let fullText = "";
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        console.log(`Processing page ${pageNum}/${pdf.numPages}`);
         const page = await pdf.getPage(pageNum);
         const textContent = await page.getTextContent();
+        
         // Join text items from the page.
         const pageText = textContent.items.map((item: any) => item.str).join(" ");
         fullText += pageText + "\n";
+        console.log(`Page ${pageNum} extracted, text length: ${pageText.length}`);
       }
       
-      console.log(`PDF extraction complete, text length: ${fullText.length}`);
+      console.log(`PDF extraction complete, total text length: ${fullText.length}`);
       return fullText.trim();
     } catch (error) {
       console.error("Error extracting PDF text:", error);
+      console.error("Error name:", error.name);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
       throw new Error(`PDF extraction failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
-  // Fallback extraction for DOCX (naively using file.text())
+  // Extract text from DOCX (using file.text() as fallback)
   const extractTextFromFile = async (file: File): Promise<string> => {
     console.log(`Extracting text from ${file.name} (${file.type})`);
+    console.log(`File size: ${file.size} bytes`);
     
     try {
       if (file.type === "application/pdf") {
-        return await extractCleanTextFromPDF(file);
+        console.log("Using PDF extraction method");
+        const text = await extractCleanTextFromPDF(file);
+        console.log(`PDF extraction successful, text length: ${text.length}`);
+        return text;
       } else if (
         file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       ) {
+        console.log("Using DOCX extraction method (file.text())");
         const text = await file.text();
         console.log(`DOCX text extracted, length: ${text.length}`);
         return text;
       } else {
+        console.error("Unsupported file type:", file.type);
         throw new Error("Unsupported file type: " + file.type);
       }
     } catch (error) {
       console.error("Text extraction failed:", error);
-      throw error;
+      console.error("Falling back to simple file.text() method");
+      
+      // Last resort: try to get the raw text
+      try {
+        const rawText = await file.text();
+        console.log(`Fallback text extraction method returned ${rawText.length} characters`);
+        return rawText;
+      } catch (fallbackError) {
+        console.error("Even fallback extraction failed:", fallbackError);
+        throw new Error("Could not extract text from file using any available method");
+      }
     }
   };
 
@@ -79,14 +106,25 @@ export const useResumeUpload = (
 
       // --- UNAUTHENTICATED FLOW ---
       if (!user) {
+        console.log("User not authenticated, performing unauthenticated flow");
         const tempFileName = `${crypto.randomUUID()}-${file.name}`;
-        const { error: uploadError } = await supabase.storage
+        console.log(`Creating temporary file: ${tempFileName}`);
+        
+        const { error: uploadError, data } = await supabase.storage
           .from("temp-resumes")
           .upload(tempFileName, file);
           
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error("Error uploading temporary file:", uploadError);
+          throw uploadError;
+        }
         
-        if (onLoginRequired) onLoginRequired();
+        console.log("Temporary file uploaded successfully");
+        
+        if (onLoginRequired) {
+          console.log("Prompting user to login/register");
+          onLoginRequired();
+        }
         
         toast({
           title: "File uploaded successfully",
@@ -98,25 +136,40 @@ export const useResumeUpload = (
       }
 
       // --- AUTHENTICATED FLOW ---
-      // 1. Upload the file to storage.
+      console.log("Beginning authenticated flow for user ID:", user.id);
+      
+      // 1. Extract text from the file first, to ensure we can process it
+      console.log("Step 1: Extracting text from file");
+      const extractedText = await extractTextFromFile(file);
+      if (!extractedText || extractedText.length < 10) {
+        console.error("Text extraction failed or returned too little text:", extractedText);
+        throw new Error("Failed to extract meaningful text from resume");
+      }
+      console.log(`Text extracted successfully (${extractedText.length} chars)`);
+      
+      // 2. Shift older resumes to maintain order
+      console.log("Step 2: Shifting older resumes");
+      await shiftResumes(user.id);
+      console.log("Resume shifting completed");
+      
+      // 3. Upload the file to storage
       const fileExt = file.name.split(".").pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
       
-      console.log(`Uploading file to storage: ${filePath}`);
+      console.log(`Step 3: Uploading file to storage: ${filePath}`);
       const { error: uploadError } = await supabase.storage
         .from("resumes")
         .upload(filePath, file);
         
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("File upload error:", uploadError);
+        throw uploadError;
+      }
       console.log("File uploaded successfully to storage");
 
-      // 2. Extract text from the file.
-      console.log("Extracting text from file...");
-      const extractedText = await extractTextFromFile(file);
-      console.log(`Text extracted successfully (${extractedText.length} chars)`);
-
-      // 3. Get the public URL (for metadata/reference).
+      // 4. Get the public URL (for metadata/reference)
+      console.log("Step 4: Generating public URL");
       const { data: { publicUrl } } = supabase.storage
         .from("resumes")
         .getPublicUrl(filePath);
@@ -124,11 +177,14 @@ export const useResumeUpload = (
       console.log("Generated public URL:", publicUrl);
       
       if (!publicUrl) {
+        console.error("Failed to generate public URL");
         throw new Error("Failed to generate public URL");
       }
 
-      // 4. Invoke the edge function with the extracted text
-      console.log("Sending extracted text to parse-resume function...");
+      // 5. Invoke the edge function with the extracted text
+      console.log("Step 5: Sending extracted text to parse-resume function...");
+      console.log(`Sending ${extractedText.length} characters of text`);
+      
       const { data, error: parseError } = await supabase.functions.invoke("parse-resume", {
         body: { resumeText: extractedText },
       });
@@ -145,12 +201,10 @@ export const useResumeUpload = (
       }
       
       console.log("Resume parsed successfully");
+      console.log("Parsed data keys:", data.data ? Object.keys(data.data) : "No data");
 
-      // 5. Shift older resumes
-      await shiftResumes(user.id);
-
-      // 6. Insert the resume record into the database.
-      console.log("Inserting resume record into database...");
+      // 6. Insert the resume record into the database
+      console.log("Step 6: Inserting resume record into database...");
       const parsedData = data.data || {};
       
       const { error: insertError } = await supabase
@@ -175,6 +229,7 @@ export const useResumeUpload = (
         
       if (insertError) {
         console.error("Database insert failed:", insertError);
+        console.error("Attempting to clean up storage...");
         await supabase.storage.from("resumes").remove([filePath]);
         throw insertError;
       }
@@ -188,6 +243,12 @@ export const useResumeUpload = (
       return true;
     } catch (error) {
       console.error("Upload process error:", error);
+      console.error("Error details:", error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      } : String(error));
+      
       toast({
         variant: "destructive",
         title: "Upload failed",

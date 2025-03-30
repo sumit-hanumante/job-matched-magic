@@ -29,13 +29,16 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+console.log('Supabase client initialized with URL:', supabaseUrl);
+
 // Initialize storage buckets if they don't exist yet
 export const initializeStorage = async () => {
   try {
+    console.log('Checking storage buckets...');
     // Check if we can access the resumes bucket
     await supabase.storage.getBucket('resumes');
     await supabase.storage.getBucket('temp-resumes');
-    console.log('Storage buckets initialized');
+    console.log('Storage buckets initialized successfully');
   } catch (error) {
     console.error('Error initializing storage buckets:', error);
   }
@@ -43,5 +46,6 @@ export const initializeStorage = async () => {
 
 // Call this function when the app initializes
 if (typeof window !== 'undefined') {
+  console.log('Initializing storage in browser environment');
   initializeStorage();
 }
