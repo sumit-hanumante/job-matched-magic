@@ -63,6 +63,7 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
     try {
       setLoading(true);
       
+      // First, sign up the user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -75,6 +76,7 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
 
       if (error) throw error;
       
+      // Successfully created account
       toast({
         title: "Account created",
         description: "Your account has been created successfully.",
