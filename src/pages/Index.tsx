@@ -7,7 +7,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import JobMatches from "@/components/JobMatches";
-import AdminTestUsers from "@/components/AdminTestUsers"; // Import the admin component
 
 const Index = () => {
   const { user } = useAuth();
@@ -31,11 +30,6 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       <Hero onGetStarted={handleGetStarted} />
-      
-      {/* Temporarily add the admin component at the top for testing */}
-      <div className="container mx-auto mt-8 px-4">
-        <AdminTestUsers />
-      </div>
       
       <main className="container mx-auto px-4 py-16 space-y-24">
         <section id="resume" className="scroll-mt-16 max-w-2xl mx-auto animate-fade-in">
