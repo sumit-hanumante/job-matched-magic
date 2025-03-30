@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Auth from "@/components/Auth";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Lazy load components
 const ResumeUpload = lazy(() => import("@/components/ResumeUpload"));
@@ -16,6 +17,7 @@ const Index = () => {
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [prefilledEmail, setPrefilledEmail] = useState("");
   const [prefilledName, setPrefilledName] = useState("");
+  const isMobile = useIsMobile();
 
   const handleGetStarted = () => {
     const targetSection = document.getElementById('resume');
@@ -31,29 +33,34 @@ const Index = () => {
   };
 
   const renderSkeleton = () => (
-    <div className="animate-pulse">
-      <div className="h-24 bg-slate-200 rounded mb-4"></div>
-      <div className="h-64 bg-slate-200 rounded"></div>
+    <div className="animate-pulse space-y-6">
+      <div className="h-6 bg-slate-200 rounded-md w-1/3 mx-auto"></div>
+      <div className="h-60 bg-slate-200 rounded-xl"></div>
     </div>
   );
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-slate-50">
       <Hero onGetStarted={handleGetStarted} />
       
-      <main className="container mx-auto px-4 py-16 space-y-24">
-        <section id="resume" className="scroll-mt-16 max-w-2xl mx-auto animate-fade-in">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
+      <main className="container mx-auto px-4 sm:px-6 py-12 sm:py-16 md:py-24 space-y-16 sm:space-y-20 md:space-y-32">
+        <section 
+          id="resume" 
+          className="scroll-mt-16 max-w-2xl mx-auto animate-fade-in"
+        >
+          <div className="text-center mb-6 sm:mb-8">
+            <h2 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary-700 to-primary-500">
               Upload Your Resume
             </h2>
-            <p className="text-base text-muted-foreground max-w-md mx-auto">
+            <p className="text-sm sm:text-base text-slate-600 max-w-md mx-auto">
               Let our AI-powered system match you with the perfect opportunities
             </p>
           </div>
-          <div className="bg-gradient-to-b from-white to-secondary/20 rounded-2xl p-8 backdrop-blur-sm border border-secondary/80 shadow-xl shadow-primary/5">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 shadow-xl shadow-slate-200/30 overflow-hidden">
             <Suspense fallback={renderSkeleton()}>
-              <ResumeUpload onLoginRequired={handleLoginPrompt} />
+              <div className="p-4 sm:p-6">
+                <ResumeUpload onLoginRequired={handleLoginPrompt} />
+              </div>
             </Suspense>
           </div>
         </section>
@@ -67,14 +74,15 @@ const Index = () => {
         )}
 
         <section id="jobs" className="scroll-mt-16 animate-fade-in">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
+          <div className="text-center mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary-700 to-primary-500">
               Available Opportunities
             </h2>
-            <p className="text-lg text-muted-foreground max-w-lg mx-auto">
+            <p className="text-sm sm:text-lg text-slate-600 max-w-lg mx-auto">
               {user ? 'Personalized job matches based on your profile' : 'Explore our curated job listings'}
             </p>
           </div>
+          
           <Suspense fallback={renderSkeleton()}>
             <JobList onLoginRequired={() => setShowAuthDialog(true)} />
           </Suspense>

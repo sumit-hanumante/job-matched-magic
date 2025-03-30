@@ -1,5 +1,5 @@
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,13 +7,13 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 210 20% 98%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 215 25% 27%;
+    --primary: 157 65% 53%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -25,12 +25,12 @@
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 215 25% 27%;
+    --ring: 157 65% 53%;
     --radius: 0.75rem;
   }
 
   * {
-    @apply border-border selection:bg-slate-100 selection:text-slate-900;
+    @apply border-border selection:bg-primary-50 selection:text-primary-800;
   }
   
   body {
@@ -40,6 +40,7 @@
 
   html {
     @apply scroll-smooth;
+    font-family: 'Inter', sans-serif;
   }
 }
 
@@ -57,6 +58,22 @@
     @apply absolute w-1 h-1 rounded-full;
     background: rgba(30, 41, 59, 0.15);
     animation: move-dot 3s linear infinite;
+  }
+  
+  .card-shadow {
+    @apply shadow-lg shadow-primary-100/20;
+  }
+  
+  .mobile-container {
+    @apply px-4 sm:px-6 md:px-0;
+  }
+  
+  .section-title {
+    @apply text-2xl font-bold text-slate-800;
+  }
+  
+  .section-description {
+    @apply text-base text-slate-600 mt-1;
   }
 }
 
