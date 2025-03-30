@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 export async function getJobMatches(candidateEmbedding: number[]): Promise<any[]> {
   try {
     // Call the stored procedure "match_jobs" using supabase.rpc
-    // Convert the candidateEmbedding array to a properly formatted vector parameter
+    // The PostgreSQL vector type expects the array to be properly formatted
     const { data, error } = await supabase.rpc("match_jobs", { 
       candidate_vector: candidateEmbedding 
     });
