@@ -30,29 +30,6 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
     return emailRegex.test(email);
   };
 
-  const createUserPreferences = async (userId: string) => {
-    try {
-      const defaultPreferences = {
-        id: userId,
-        job_alerts: true,
-        preferred_job_types: ['software_development'],
-        preferred_locations: ['remote'],
-        job_search_status: 'actively_looking'
-      };
-
-      const { error } = await supabase
-        .from('user_preferences')
-        .insert([defaultPreferences]);
-
-      if (error) {
-        console.error('Error creating user preferences:', error);
-        // We will still allow the registration to proceed even if this fails
-      }
-    } catch (error) {
-      console.error('Exception creating user preferences:', error);
-    }
-  };
-
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -98,31 +75,21 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
 
       if (error) throw error;
       
-      if (data?.user) {
-        // Try to create user preferences
-        await createUserPreferences(data.user.id);
-        
-        toast({
-          title: "Account created",
-          description: "Your account has been created successfully.",
-        });
-        
-        if (onSuccess) {
-          onSuccess();
-        }
-      } else {
-        toast({
-          title: "Check your email",
-          description: "We've sent you a confirmation email.",
-        });
+      toast({
+        title: "Account created",
+        description: "Your account has been created successfully.",
+      });
+      
+      if (onSuccess) {
+        onSuccess();
       }
     } catch (error) {
+      console.error("Signup detailed error:", error);
       toast({
         variant: "destructive",
         title: "Error",
         description: error instanceof Error ? error.message : "An error occurred",
       });
-      console.error("Signup error:", error);
     } finally {
       setLoading(false);
     }
