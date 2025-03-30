@@ -33,7 +33,11 @@ const ResumeUploadForm = ({ file, isUploading, onUpload, isAuthenticated }: Resu
       console.error = (...args) => {
         originalConsoleError(...args);
         const message = args.map(arg => 
-          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+          typeof arg === 'object' && arg instanceof Error
+            ? `${arg.name}: ${arg.message}\nStack: ${arg.stack}`
+            : typeof arg === 'object' 
+              ? JSON.stringify(arg, null, 2) 
+              : String(arg)
         ).join(' ');
         
         setUploadStatus(prev => prev + "ERROR: " + message + "\n");
@@ -85,8 +89,8 @@ const ResumeUploadForm = ({ file, isUploading, onUpload, isAuthenticated }: Resu
       {isUploading && (
         <div className="mt-4 p-4 bg-secondary/10 rounded-lg animate-fade-in">
           <h3 className="text-sm font-medium mb-2">Upload Progress:</h3>
-          <div className="max-h-60 overflow-auto rounded border border-border p-2">
-            <pre className="text-xs whitespace-pre-wrap">
+          <div className="max-h-60 overflow-auto rounded border border-border p-2 bg-black/5">
+            <pre className="text-xs whitespace-pre-wrap font-mono">
               {uploadStatus || "Starting upload process..."}
             </pre>
           </div>

@@ -20,6 +20,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     headers: {
       'x-app-version': '1.0.0',
+      'Content-Type': 'application/json', // Ensure proper content type
     },
   },
   realtime: {
@@ -39,6 +40,17 @@ export const initializeStorage = async () => {
     await supabase.storage.getBucket('resumes');
     await supabase.storage.getBucket('temp-resumes');
     console.log('Storage buckets initialized successfully');
+    
+    // Also check if we can invoke functions to verify setup
+    try {
+      await supabase.functions.invoke('parse-resume', {
+        method: 'HEAD', // Just to check if the function exists
+      });
+      console.log('Successfully connected to Edge Functions API');
+    } catch (funcError) {
+      console.warn('Edge Functions check failed:', funcError);
+      // This is just a check, not critical for operation
+    }
   } catch (error) {
     console.error('Error initializing storage buckets:', error);
   }

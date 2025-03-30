@@ -175,36 +175,89 @@ export const useResumeUpload = (
         .getPublicUrl(filePath);
         
       console.log("Generated public URL:", publicUrl);
-      
-      if (!publicUrl) {
-        console.error("Failed to generate public URL");
-        throw new Error("Failed to generate public URL");
-      }
 
-      // 5. Invoke the edge function with the extracted text
+      // 5. Call the edge function with the extracted text
       console.log("Step 5: Sending extracted text to parse-resume function...");
       console.log(`Sending ${extractedText.length} characters of text`);
       
-      const { data, error: parseError } = await supabase.functions.invoke("parse-resume", {
-        body: { resumeText: extractedText },
-      });
-      
-      if (parseError) {
-        console.error("Parse-resume function error:", parseError);
-        throw parseError;
+      try {
+        console.log("Calling edge function with full request body:", {
+          resumeText: extractedText.substring(0, 100) + "..." // Log just the start for brevity
+        });
+        
+        const { data, error: parseError } = await supabase.functions.invoke("parse-resume", {
+          method: "POST",
+          body: { resumeText: extractedText },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+        
+        if (parseError) {
+          console.error("Edge function error details:", {
+            name: parseError.name,
+            message: parseError.message,
+            code: parseError.code,
+            stack: parseError.stack,
+          });
+          throw parseError;
+        }
+        
+        console.log("Edge function response received:", data ? Object.keys(data) : "No data");
+        
+        if (!data?.success) {
+          const errorMsg = data?.error || "Failed to parse resume";
+          console.error("Edge function execution failed:", errorMsg);
+          throw new Error(errorMsg);
+        }
+        
+        console.log("Resume parsed successfully");
+        if (data.data) {
+          console.log("Parsed data keys:", Object.keys(data.data));
+        } else {
+          console.warn("No data returned from parse function");
+        }
+      } catch (invocationError) {
+        console.error("Edge function invocation error:", invocationError);
+        console.error("Error type:", typeof invocationError);
+        console.error("Error details:", JSON.stringify(invocationError, null, 2));
+        
+        // Fall back to just saving the extracted text without parsing
+        console.log("Falling back to saving raw text without AI parsing");
+        
+        // 6. Insert the resume record into the database without parsed data
+        console.log("Step 6: Inserting resume record into database with raw text only...");
+        
+        const { error: insertError } = await supabase
+          .from("resumes")
+          .insert({
+            user_id: user.id,
+            file_name: file.name,
+            file_path: filePath,
+            content_type: file.type,
+            status: "uploaded", // Mark as just uploaded, not processed
+            order_index: 1,
+            resume_text: extractedText, // Store the full extracted text
+            public_url: publicUrl,
+          });
+          
+        if (insertError) {
+          console.error("Database insert failed:", insertError);
+          console.error("Attempting to clean up storage...");
+          await supabase.storage.from("resumes").remove([filePath]);
+          throw insertError;
+        }
+        
+        toast({
+          title: "Resume uploaded with basic processing",
+          description: "Your resume text was saved but could not be fully analyzed.",
+        });
+        
+        return true;
       }
       
-      if (!data?.success) {
-        const errorMsg = data?.error || "Failed to parse resume";
-        console.error("Parse-resume function failed:", errorMsg);
-        throw new Error(errorMsg);
-      }
-      
-      console.log("Resume parsed successfully");
-      console.log("Parsed data keys:", data.data ? Object.keys(data.data) : "No data");
-
-      // 6. Insert the resume record into the database
-      console.log("Step 6: Inserting resume record into database...");
+      // 6. Insert the resume record into the database with parsed data
+      console.log("Step 6: Inserting resume record into database with parsed data...");
       const parsedData = data.data || {};
       
       const { error: insertError } = await supabase

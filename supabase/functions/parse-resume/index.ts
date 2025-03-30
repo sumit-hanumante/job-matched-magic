@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.22.0"
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 serve(async (req) => {
@@ -16,14 +17,24 @@ serve(async (req) => {
   console.log("----- parse-resume function: START -----");
 
   try {
+    console.log("Request headers:", JSON.stringify(Object.fromEntries(req.headers), null, 2));
+
     // 1. Read the raw request body
     const rawBody = await req.text();
     console.log("Raw request body length =>", rawBody.length);
+    
+    // Additional validation for empty body
+    if (!rawBody || rawBody.length === 0) {
+      console.error("Empty request body received");
+      throw new Error("Request body is empty");
+    }
 
     // 2. Parse JSON expecting 'resumeText'
     let resumeText;
     try {
       const body = JSON.parse(rawBody);
+      console.log("Request body format => ", Object.keys(body).join(', '));
+      
       resumeText = body.resumeText;
       
       // Handle case where resumeUrl might be sent instead
@@ -32,10 +43,9 @@ serve(async (req) => {
         console.log("URL provided:", body.resumeUrl);
         throw new Error("Direct text extraction is required. URL-based extraction is no longer supported.");
       }
-      
-      console.log("Request body format => ", Object.keys(body).join(', '));
     } catch (parseError) {
       console.error("JSON parsing error:", parseError);
+      console.error("Raw body:", rawBody.substring(0, 500) + "..."); // Log first 500 chars for debugging
       throw new Error(`Failed to parse request JSON: ${parseError.message}`);
     }
     
@@ -52,7 +62,17 @@ serve(async (req) => {
     
     if (!geminiApiKey) {
       console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
-      throw new Error("Missing GEMINI_API_KEY in environment");
+      // Instead of throwing, return a less processed response
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            resume_text: resumeText, // Just return the raw text
+          },
+          message: "GEMINI_API_KEY is missing, saving raw text only."
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
     
     const genAI = new GoogleGenerativeAI(geminiApiKey);
@@ -99,10 +119,13 @@ serve(async (req) => {
     } catch (parseErr) {
       console.error("Failed to parse Gemini response as JSON:", parseErr);
       console.log("Raw Gemini response:", rawGeminiResponse);
+      // Create a minimal valid structure instead of throwing
       parsedData = { 
         extracted_skills: [],
         preferred_locations: [],
         preferred_companies: [],
+        personal_information: {},
+        summary: "Failed to parse resume automatically. Raw text saved."
       };
     }
     
@@ -119,10 +142,13 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Error in parse-resume =>", error);
+    // For actual errors, return an error response
     return new Response(
       JSON.stringify({
         success: false,
         error: error.message || "Failed to process request",
+        errorType: error.name || "Unknown",
+        errorStack: error.stack || "No stack trace available",
       }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
