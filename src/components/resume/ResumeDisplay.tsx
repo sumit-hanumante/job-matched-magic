@@ -32,21 +32,19 @@ const ResumeDisplay = ({
     }
   };
   
-  // Status color mapping
+  // Status color mapping with more robust handling
   const statusColor = () => {
-    switch (status.toLowerCase()) {
-      case 'parsed':
-      case 'completed':
-      case 'active':
-        return 'bg-green-100 text-green-700';
-      case 'pending':
-      case 'processing':
-        return 'bg-blue-100 text-blue-700';
-      case 'failed':
-      case 'error':
-        return 'bg-red-100 text-red-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
+    // Make sure status is not undefined and convert to lowercase for comparison
+    const normalizedStatus = status?.toLowerCase() || '';
+    
+    if (['parsed', 'completed', 'active', 'processed'].includes(normalizedStatus)) {
+      return 'bg-green-100 text-green-700';
+    } else if (['pending', 'processing', 'uploaded'].includes(normalizedStatus)) {
+      return 'bg-blue-100 text-blue-700';
+    } else if (['failed', 'error'].includes(normalizedStatus)) {
+      return 'bg-red-100 text-red-700';
+    } else {
+      return 'bg-gray-100 text-gray-700';
     }
   };
 
@@ -79,8 +77,10 @@ const ResumeDisplay = ({
           "rounded-full px-2 py-0.5 text-xs ml-0 sm:ml-auto flex items-center gap-1 capitalize",
           statusColor()
         )}>
-          {status === 'pending' && <RefreshCw className="w-3 h-3 animate-spin" />}
-          Status: {status}
+          {(status === 'pending' || status === 'processing' || status === 'uploaded') && (
+            <RefreshCw className="w-3 h-3 animate-spin" />
+          )}
+          Status: {status || 'Unknown'}
         </div>
       </div>
       
