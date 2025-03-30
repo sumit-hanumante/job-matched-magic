@@ -12,6 +12,11 @@ import { Trash2, AlertCircle, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
+import ResumeFileHandler from "./resume/ResumeFileHandler";
+import ResumeUploadProgress from "./resume/ResumeUploadProgress";
+import ResumeCleanupButton from "./resume/ResumeCleanupButton";
+import { useUploadProgress } from "@/hooks/use-upload-progress";
+import { useConsoleCapture } from "@/hooks/use-console-capture";
 
 interface ResumeUploadProps {
   onLoginRequired?: (email?: string, fullName?: string) => void;
@@ -21,7 +26,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<string>("");
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [currentResume, setCurrentResume] = useState<{
@@ -38,6 +42,8 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   const { isProcessing, generateJobMatches } = useJobMatching();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { uploadProgress } = useUploadProgress(isUploading);
+  const { capturedOutput } = useConsoleCapture(isUploading, (error) => setErrorDetails(error));
 
   // Load the current resume when the component mounts or when the user changes
   useEffect(() => {
@@ -52,78 +58,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       setErrorDetails(null);
     }
   }, [file, isUploading]);
-
-  // Simulate upload progress
-  useEffect(() => {
-    let intervalId: number;
-    
-    if (isUploading) {
-      setUploadProgress(0);
-      intervalId = window.setInterval(() => {
-        setUploadProgress(prev => {
-          // Go up to 90%, the last 10% is for server processing
-          if (prev >= 90) return prev;
-          return prev + Math.random() * 15;
-        });
-      }, 500);
-    } else if (uploadProgress > 0) {
-      // Set to 100% when done
-      setUploadProgress(100);
-      
-      // Reset after showing complete
-      const timeout = setTimeout(() => {
-        setUploadProgress(0);
-      }, 1500);
-      
-      return () => clearTimeout(timeout);
-    }
-    
-    return () => {
-      if (intervalId) window.clearInterval(intervalId);
-    };
-  }, [isUploading, uploadProgress]);
-
-  // Listen for console logs to update the status
-  useEffect(() => {
-    if (isUploading) {
-      const originalConsoleLog = console.log;
-      const originalConsoleError = console.error;
-      
-      console.log = (...args) => {
-        originalConsoleLog(...args);
-        const message = args.map(arg => 
-          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-        ).join(' ');
-        
-        setUploadStatus(prev => prev + message + "\n");
-      };
-      
-      console.error = (...args) => {
-        originalConsoleError(...args);
-        const message = args.map(arg => 
-          typeof arg === 'object' && arg instanceof Error
-            ? `${arg.name}: ${arg.message}`
-            : typeof arg === 'object' 
-              ? JSON.stringify(arg, null, 2) 
-              : String(arg)
-        ).join(' ');
-        
-        setUploadStatus(prev => prev + "ERROR: " + message + "\n");
-        
-        // Extract error for UI display
-        if (args[0] === "Upload process error:" && args[1]) {
-          setErrorDetails(typeof args[1] === 'object' 
-            ? (args[1].message || JSON.stringify(args[1])) 
-            : String(args[1]));
-        }
-      };
-      
-      return () => {
-        console.log = originalConsoleLog;
-        console.error = originalConsoleError;
-      };
-    }
-  }, [isUploading]);
 
   const loadCurrentResume = async () => {
     if (user) {
@@ -141,45 +75,8 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && (droppedFile.type === "application/pdf" || droppedFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-      setFile(droppedFile);
-    } else {
-      toast({
-        variant: "destructive",
-        title: "Invalid file",
-        description: "Please upload a PDF or Word document"
-      });
-    }
-  };
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile && (selectedFile.type === "application/pdf" || selectedFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-      setFile(selectedFile);
-      // Clean up the input value to allow selecting the same file again
-      e.target.value = '';
-    } else if (selectedFile) {
-      toast({
-        variant: "destructive",
-        title: "Invalid file",
-        description: "Please upload a PDF or Word document"
-      });
-      e.target.value = '';
-    }
+  const handleFileSelected = (selectedFile: File) => {
+    setFile(selectedFile);
   };
 
   const handleUpload = async () => {
@@ -192,8 +89,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     const success = await uploadResume(file);
     if (success) {
       setFile(null);
-      const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
       
       toast({
         title: "Resume uploaded successfully",
@@ -243,29 +138,12 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
 
   return (
     <div className="w-full">
-      {isUploading && (
-        <div className="mb-4 space-y-2 animate-fade-in">
-          <div className="flex justify-between items-center text-sm text-slate-600 mb-1">
-            <span>Uploading resume...</span>
-            <span>{Math.round(uploadProgress)}%</span>
-          </div>
-          <Progress value={uploadProgress} className="h-2" />
-        </div>
-      )}
+      <ResumeUploadProgress 
+        isUploading={isUploading} 
+        progress={uploadProgress} 
+        errorDetails={errorDetails} 
+      />
       
-      {errorDetails && !isUploading && (
-        <div className="p-4 mb-4 border border-red-200 bg-red-50 rounded-lg text-red-700 text-sm flex items-start gap-3 animate-slide-up">
-          <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-          <div>
-            <h4 className="font-medium mb-1">Upload failed</h4>
-            <p className="text-sm">{errorDetails}</p>
-            <p className="mt-2 text-sm">
-              Please try again or contact support if the issue persists.
-            </p>
-          </div>
-        </div>
-      )}
-
       {currentResume && (
         <div className="mb-6 sm:mb-8 animate-fade-in">
           <ResumeDisplay
@@ -295,15 +173,19 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       )}
 
       {!file ? (
-        <ResumeDropzone
-          isDragging={isDragging}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onFileSelect={handleFileInput}
-          hasExistingResume={!!currentResume}
-          isAuthenticated={!!user}
-        />
+        <ResumeFileHandler onFileSelected={handleFileSelected}>
+          {({ isDragging, handleDragOver, handleDragLeave, handleDrop, handleFileInput }) => (
+            <ResumeDropzone
+              isDragging={isDragging}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onFileSelect={handleFileInput}
+              hasExistingResume={!!currentResume}
+              isAuthenticated={!!user}
+            />
+          )}
+        </ResumeFileHandler>
       ) : (
         <ResumeUploadForm
           file={file}
