@@ -1,5 +1,6 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-// import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -192,6 +193,7 @@ serve(async (req) => {
       throw new Error('Missing Supabase credentials');
     }
     
+    // Fixed: import createClient correctly
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Try all approaches in parallel

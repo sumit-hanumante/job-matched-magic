@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getUserJobMatches } from '@/lib/jobMatcher';
 import JobCard from '@/components/JobCard';
@@ -20,6 +20,7 @@ export const JobMatches = () => {
       try {
         setIsLoading(true);
         const matchData = await getUserJobMatches(user.id);
+        console.log(`Fetched ${matchData.length} job matches for user`);
         setMatches(matchData);
       } catch (error) {
         console.error('Error fetching job matches:', error);
@@ -35,6 +36,14 @@ export const JobMatches = () => {
 
     fetchMatches();
   }, [user, toast]);
+
+  // Memoize the sorted matches to prevent unnecessary re-renders
+  const sortedMatches = useMemo(() => {
+    if (!matches.length) return [];
+    
+    // Create a shallow copy before sorting to avoid mutating the original array
+    return [...matches].sort((a, b) => b.match_score - a.match_score);
+  }, [matches]);
 
   if (isLoading) {
     return (
@@ -72,7 +81,7 @@ export const JobMatches = () => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {matches.map((match) => (
+        {sortedMatches.map((match) => (
           <div key={match.id} className="relative">
             <div className="absolute -top-2 -right-2 z-10">
               <Badge className="bg-primary">

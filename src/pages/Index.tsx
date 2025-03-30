@@ -1,12 +1,15 @@
 
+import { lazy, Suspense, useState } from "react";
 import Hero from "@/components/Hero";
-import ResumeUpload from "@/components/ResumeUpload";
-import JobList from "@/components/JobList";
-import Auth from "@/components/Auth";
 import { useAuth } from "@/components/AuthProvider";
-import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import JobMatches from "@/components/JobMatches";
+import Auth from "@/components/Auth";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Lazy load components
+const ResumeUpload = lazy(() => import("@/components/ResumeUpload"));
+const JobList = lazy(() => import("@/components/JobList"));
+const JobMatches = lazy(() => import("@/components/JobMatches"));
 
 const Index = () => {
   const { user } = useAuth();
@@ -27,6 +30,13 @@ const Index = () => {
     setShowAuthDialog(true);
   };
 
+  const renderSkeleton = () => (
+    <div className="animate-pulse">
+      <div className="h-24 bg-slate-200 rounded mb-4"></div>
+      <div className="h-64 bg-slate-200 rounded"></div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen">
       <Hero onGetStarted={handleGetStarted} />
@@ -42,13 +52,17 @@ const Index = () => {
             </p>
           </div>
           <div className="bg-gradient-to-b from-white to-secondary/20 rounded-2xl p-8 backdrop-blur-sm border border-secondary/80 shadow-xl shadow-primary/5">
-            <ResumeUpload onLoginRequired={handleLoginPrompt} />
+            <Suspense fallback={renderSkeleton()}>
+              <ResumeUpload onLoginRequired={handleLoginPrompt} />
+            </Suspense>
           </div>
         </section>
 
         {user && (
           <section id="job-matches" className="scroll-mt-16 animate-fade-in">
-            <JobMatches />
+            <Suspense fallback={renderSkeleton()}>
+              <JobMatches />
+            </Suspense>
           </section>
         )}
 
@@ -61,7 +75,9 @@ const Index = () => {
               {user ? 'Personalized job matches based on your profile' : 'Explore our curated job listings'}
             </p>
           </div>
-          <JobList onLoginRequired={() => setShowAuthDialog(true)} />
+          <Suspense fallback={renderSkeleton()}>
+            <JobList onLoginRequired={() => setShowAuthDialog(true)} />
+          </Suspense>
         </section>
 
         <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>

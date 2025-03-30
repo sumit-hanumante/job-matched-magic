@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Job } from "@/lib/types";
 import JobCard from "./JobCard";
 import { useAuth } from "@/components/AuthProvider";
@@ -9,6 +9,7 @@ import { toast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { JobFilters } from "./JobFilters";
 import { JobListHeader } from "./JobListHeader";
+import { Button } from "@/components/ui/button";
 
 interface JobListProps {
   jobs?: Job[];
@@ -20,7 +21,7 @@ interface SourceCount {
   count: number;
 }
 
-const INITIAL_JOB_LIMIT = 10;
+const JOBS_PER_PAGE = 15;
 const ADMIN_EMAIL = 'admin@jobmagic.com';
 
 const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
@@ -31,6 +32,7 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   const [scrapingError, setScrapingError] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<string>("all");
   const [selectedJobType, setSelectedJobType] = useState<string>("software developer");
+  const [currentPage, setCurrentPage] = useState(1);
   const { user } = useAuth();
   const navigate = useNavigate();
   
@@ -39,11 +41,13 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
   const handleSourceChange = useCallback((source: string) => {
     console.log('Source changed to:', source);
     setSelectedSource(source);
+    setCurrentPage(1); // Reset to first page when filter changes
   }, []);
 
   const handleJobTypeChange = useCallback((type: string) => {
     console.log('Job type changed to:', type);
     setSelectedJobType(type);
+    setCurrentPage(1); // Reset to first page when filter changes
   }, []);
 
   const handleJobClick = useCallback((job: Job) => {
@@ -70,7 +74,7 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
 
       const { data: jobsData, error } = await query
         .order('posted_date', { ascending: false })
-        .limit(isAdmin ? undefined : INITIAL_JOB_LIMIT);
+        .limit(50); // Fetch more than we show per page to reduce subsequent API calls
 
       if (error) throw error;
 
@@ -167,6 +171,15 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
     }
   }, [selectedSource, propJobs, fetchJobs]);
 
+  // Memoize the paginated jobs to prevent unnecessary re-renders
+  const paginatedJobs = useMemo(() => {
+    const startIndex = (currentPage - 1) * JOBS_PER_PAGE;
+    return jobs.slice(startIndex, startIndex + JOBS_PER_PAGE);
+  }, [jobs, currentPage]);
+
+  // Calculate total pages
+  const totalPages = Math.ceil(jobs.length / JOBS_PER_PAGE);
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -214,7 +227,7 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
         )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {jobs.map((job) => (
+        {paginatedJobs.map((job) => (
           <JobCard 
             key={job.id} 
             job={job} 
@@ -222,6 +235,29 @@ const JobList = ({ jobs: propJobs, onLoginRequired }: JobListProps) => {
           />
         ))}
       </div>
+      
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center mt-8 gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          <span className="flex items-center px-4">
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button 
+            variant="outline" 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
