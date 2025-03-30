@@ -14,5 +14,34 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: typeof window !== 'undefined' ? localStorage : undefined,
     persistSession: true,
     autoRefreshToken: true,
-  }
+    detectSessionInUrl: true,
+    flowType: 'implicit',
+  },
+  global: {
+    headers: {
+      'x-app-version': '1.0.0',
+    },
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
 });
+
+// Initialize storage buckets if they don't exist yet
+export const initializeStorage = async () => {
+  try {
+    // Check if we can access the resumes bucket
+    await supabase.storage.getBucket('resumes');
+    await supabase.storage.getBucket('temp-resumes');
+    console.log('Storage buckets initialized');
+  } catch (error) {
+    console.error('Error initializing storage buckets:', error);
+  }
+};
+
+// Call this function when the app initializes
+if (typeof window !== 'undefined') {
+  initializeStorage();
+}

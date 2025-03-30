@@ -15,25 +15,29 @@ serve(async (req) => {
 
   console.log("----- parse-resume function: START -----");
 
-  // 1. Read the raw request body
-  const rawBody = await req.text();
-  console.log("Raw request body =>", rawBody);
-
   try {
+    // 1. Read the raw request body
+    const rawBody = await req.text();
+    console.log("Raw request body length =>", rawBody.length);
+
     // 2. Parse JSON expecting 'resumeText'
     const { resumeText } = JSON.parse(rawBody);
-    console.log("Parsed resumeText (first 200 chars) =>", resumeText ? resumeText.substring(0, 200) + "..." : "Empty");
-
-    if (!resumeText || resumeText.length === 0) {
+    
+    if (!resumeText) {
       throw new Error("No resume text provided");
     }
+    
+    console.log("Parsed resumeText length =>", resumeText.length);
+    console.log("First 200 chars of resumeText =>", resumeText.substring(0, 200));
 
     // 3. Initialize Gemini
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || "";
+    console.log("Gemini API Key present:", !!geminiApiKey);
+    
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // 4. Build the prompt using the extracted resume text - Enhanced for job matching
+    // 4. Build the prompt using the extracted resume text
     const prompt = `
       Analyze the following resume text and extract the candidate's details in a format optimized for job matching.
       
@@ -56,26 +60,38 @@ serve(async (req) => {
       Resume text:
       ${resumeText}
     `;
-    console.log("Sending prompt to Gemini (first 300 chars) =>", prompt.substring(0, 300) + "...");
+    
+    console.log("Sending prompt to Gemini (prompt length) =>", prompt.length);
     
     // 5. Call Gemini
     const result = await model.generateContent(prompt);
     const rawGeminiResponse = await result.response.text();
-    console.log("Gemini raw response (first 300 chars) =>", rawGeminiResponse.substring(0, 300) + "...");
+    console.log("Gemini raw response received, length =>", rawGeminiResponse.length);
+    console.log("Gemini first 300 chars =>", rawGeminiResponse.substring(0, 300));
     
     // 6. Attempt to parse Gemini's response as JSON
-    let geminiData;
+    let parsedData;
     try {
-      geminiData = JSON.parse(rawGeminiResponse);
+      parsedData = JSON.parse(rawGeminiResponse.replace(/```json|```/g, '').trim());
+      console.log("Successfully parsed JSON response");
     } catch (parseErr) {
-      geminiData = { raw: rawGeminiResponse };
+      console.error("Failed to parse Gemini response as JSON:", parseErr);
+      parsedData = { 
+        extracted_skills: [],
+        preferred_locations: [],
+        preferred_companies: [],
+        raw_text: resumeText // Store the raw text as fallback
+      };
     }
     
-    // 7. Return the Gemini response
+    // 7. Return the processed data
     return new Response(
       JSON.stringify({
         success: true,
-        data: geminiData,
+        data: {
+          ...parsedData,
+          resume_text: resumeText // Always include the full resume text
+        }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -84,7 +100,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || "Failed to parse request",
+        error: error.message || "Failed to process request",
       }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
