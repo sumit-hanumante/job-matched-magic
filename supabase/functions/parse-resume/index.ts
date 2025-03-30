@@ -78,7 +78,7 @@ serve(async (req) => {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // 4. Build the prompt using the extracted resume text
+    // 4. Build the enhanced prompt using the extracted resume text
     const prompt = `
       Analyze the following resume text and extract the candidate's details in a format optimized for job matching.
       
@@ -94,9 +94,13 @@ serve(async (req) => {
       - min_salary (extract minimum expected salary if mentioned, as a number without currency symbols)
       - max_salary (extract maximum expected salary if mentioned, as a number without currency symbols)
       - preferred_work_type (remote, hybrid, on-site, etc.)
+      - total_years_experience (calculate the total years of professional experience based on the resume, return as a number)
+      - possible_job_titles (an array of at least 5-10 specific job titles that this candidate would be suitable for based on their skills and experience)
       
       Format the skills as a clean array of strings, not nested objects, to enable easier matching with job requirements.
       Make sure salary values are numeric only (no currency symbols or text).
+      For total_years_experience, calculate the actual number from all experience entries (not just what's stated in summary).
+      For possible_job_titles, be specific and provide a variety of relevant roles at different levels based on the candidate's experience.
       
       Resume text:
       ${resumeText}
@@ -125,7 +129,9 @@ serve(async (req) => {
         preferred_locations: [],
         preferred_companies: [],
         personal_information: {},
-        summary: "Failed to parse resume automatically. Raw text saved."
+        summary: "Failed to parse resume automatically. Raw text saved.",
+        total_years_experience: null,
+        possible_job_titles: []
       };
     }
     

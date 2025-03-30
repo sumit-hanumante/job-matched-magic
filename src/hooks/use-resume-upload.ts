@@ -248,6 +248,8 @@ export const useResumeUpload = (
           min_salary: parsedData.min_salary || null,
           max_salary: parsedData.max_salary || null,
           preferred_work_type: parsedData.preferred_work_type || null,
+          total_years_experience: parsedData.total_years_experience || null,
+          possible_job_titles: parsedData.possible_job_titles || []
         });
       }
       

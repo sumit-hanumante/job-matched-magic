@@ -69,7 +69,16 @@ export const fetchCurrentResume = async (userId: string) => {
   try {
     const { data, error } = await supabase
       .from('resumes')
-      .select('id, file_name, status, created_at, file_path, order_index')
+      .select(`
+        id, 
+        file_name, 
+        status, 
+        created_at, 
+        file_path, 
+        order_index, 
+        total_years_experience,
+        possible_job_titles
+      `)
       .eq('user_id', userId)
       .eq('order_index', 1)  // Get primary resume (order_index = 1)
       .maybeSingle();
@@ -86,7 +95,9 @@ export const fetchCurrentResume = async (userId: string) => {
         status: data.status,
         uploaded_at: new Date(data.created_at).toLocaleDateString(),
         file_path: data.file_path,
-        is_primary: data.order_index === 1
+        is_primary: data.order_index === 1,
+        total_years_experience: data.total_years_experience,
+        possible_job_titles: data.possible_job_titles
       };
     }
     return null;
@@ -106,7 +117,16 @@ export const fetchAllResumes = async (userId: string) => {
   try {
     const { data, error } = await supabase
       .from('resumes')
-      .select('id, file_name, status, created_at, file_path, order_index')
+      .select(`
+        id, 
+        file_name, 
+        status, 
+        created_at, 
+        file_path, 
+        order_index, 
+        total_years_experience,
+        possible_job_titles
+      `)
       .eq('user_id', userId)
       .order('order_index', { ascending: true });
 
@@ -121,7 +141,9 @@ export const fetchAllResumes = async (userId: string) => {
       status: resume.status,
       uploaded_at: new Date(resume.created_at).toLocaleDateString(),
       file_path: resume.file_path,
-      is_primary: resume.order_index === 1
+      is_primary: resume.order_index === 1,
+      total_years_experience: resume.total_years_experience,
+      possible_job_titles: resume.possible_job_titles
     }));
   } catch (error) {
     console.error('Error in fetchAllResumes:', error);
