@@ -1,12 +1,14 @@
+
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { shiftResumes } from "@/lib/resume-utils";
 import * as pdfjsLib from "pdfjs-dist";
 
-// Update the worker source to match the API version
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+// Dynamically determine the proper worker URL based on the PDF.js version
+// This approach prevents version mismatches between the API and worker
+const pdfVersion = pdfjsLib.version || "2.16.105";
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
 
 export const useResumeUpload = (
   user: any,

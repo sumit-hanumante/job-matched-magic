@@ -21,12 +21,14 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     uploaded_at?: string;
     id?: string;
     file_path?: string;
+    is_primary?: boolean;
   } | null>(null);
   
   const { user } = useAuth();
   const { isUploading, uploadResume } = useResumeUpload(user, onLoginRequired);
   const { isProcessing, generateJobMatches } = useJobMatching();
 
+  // Load the current resume when the component mounts or when the user changes
   useEffect(() => {
     if (user) {
       loadCurrentResume();
@@ -74,10 +76,14 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       setFile(null);
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
+      
+      // Reload the current resume after successful upload
       await loadCurrentResume();
-      const resumeId = currentResume?.id;
-      if (resumeId) {
-        generateJobMatches(resumeId);
+      
+      // Generate job matches if we have a resume ID
+      const updatedResume = await fetchCurrentResume(user?.id || '');
+      if (updatedResume?.id) {
+        generateJobMatches(updatedResume.id);
       }
     }
   };
@@ -93,6 +99,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
             const fileInput = document.getElementById('file-upload') as HTMLInputElement;
             if (fileInput) fileInput.click();
           }}
+          isPrimary={currentResume.is_primary}
         />
       )}
 

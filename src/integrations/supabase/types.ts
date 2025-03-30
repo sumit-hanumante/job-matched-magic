@@ -9,6 +9,35 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      job_embeddings: {
+        Row: {
+          created_at: string | null
+          embedding: string
+          id: string
+          job_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          embedding: string
+          id?: string
+          job_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          embedding?: string
+          id?: string
+          job_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_embeddings_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_matches: {
         Row: {
           company_match_score: number | null
