@@ -170,27 +170,25 @@ export const useResumeUpload = (
 
       // 4. Get the public URL (for metadata/reference)
       console.log("Step 4: Generating public URL");
-      const { data: { publicUrl } } = supabase.storage
+      const { data: urlData } = supabase.storage
         .from("resumes")
         .getPublicUrl(filePath);
         
-      console.log("Generated public URL:", publicUrl);
+      console.log("Generated public URL:", urlData.publicUrl);
 
       // 5. Call the edge function with the extracted text
       console.log("Step 5: Sending extracted text to parse-resume function...");
       console.log(`Sending ${extractedText.length} characters of text`);
       
+      let parsedData = null;
       try {
         console.log("Calling edge function with full request body:", {
           resumeText: extractedText.substring(0, 100) + "..." // Log just the start for brevity
         });
         
-        const { data, error: parseError } = await supabase.functions.invoke("parse-resume", {
+        const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
           method: "POST",
           body: { resumeText: extractedText },
-          headers: {
-            "Content-Type": "application/json",
-          },
         });
         
         if (parseError) {
@@ -203,17 +201,18 @@ export const useResumeUpload = (
           throw parseError;
         }
         
-        console.log("Edge function response received:", data ? Object.keys(data) : "No data");
+        console.log("Edge function response received:", responseData ? Object.keys(responseData) : "No data");
         
-        if (!data?.success) {
-          const errorMsg = data?.error || "Failed to parse resume";
+        if (!responseData?.success) {
+          const errorMsg = responseData?.error || "Failed to parse resume";
           console.error("Edge function execution failed:", errorMsg);
           throw new Error(errorMsg);
         }
         
         console.log("Resume parsed successfully");
-        if (data.data) {
-          console.log("Parsed data keys:", Object.keys(data.data));
+        if (responseData.data) {
+          console.log("Parsed data keys:", Object.keys(responseData.data));
+          parsedData = responseData.data;
         } else {
           console.warn("No data returned from parse function");
         }
@@ -224,51 +223,24 @@ export const useResumeUpload = (
         
         // Fall back to just saving the extracted text without parsing
         console.log("Falling back to saving raw text without AI parsing");
-        
-        // 6. Insert the resume record into the database without parsed data
-        console.log("Step 6: Inserting resume record into database with raw text only...");
-        
-        const { error: insertError } = await supabase
-          .from("resumes")
-          .insert({
-            user_id: user.id,
-            file_name: file.name,
-            file_path: filePath,
-            content_type: file.type,
-            status: "uploaded", // Mark as just uploaded, not processed
-            order_index: 1,
-            resume_text: extractedText, // Store the full extracted text
-            public_url: publicUrl,
-          });
-          
-        if (insertError) {
-          console.error("Database insert failed:", insertError);
-          console.error("Attempting to clean up storage...");
-          await supabase.storage.from("resumes").remove([filePath]);
-          throw insertError;
-        }
-        
-        toast({
-          title: "Resume uploaded with basic processing",
-          description: "Your resume text was saved but could not be fully analyzed.",
-        });
-        
-        return true;
       }
       
-      // 6. Insert the resume record into the database with parsed data
-      console.log("Step 6: Inserting resume record into database with parsed data...");
-      const parsedData = data.data || {};
+      // 6. Insert the resume record into the database
+      console.log("Step 6: Inserting resume record into database...");
       
-      const { error: insertError } = await supabase
-        .from("resumes")
-        .insert({
-          user_id: user.id,
-          file_name: file.name,
-          file_path: filePath,
-          content_type: file.type,
-          status: "processed",
-          order_index: 1,
+      const resumeData = {
+        user_id: user.id,
+        file_name: file.name,
+        file_path: filePath,
+        content_type: file.type,
+        status: parsedData ? "processed" : "uploaded",
+        order_index: 1,
+        resume_text: extractedText, // Store the full extracted text
+      };
+
+      // Add parsed fields if available
+      if (parsedData) {
+        Object.assign(resumeData, {
           extracted_skills: parsedData.extracted_skills || [],
           experience: parsedData.experience || "",
           preferred_locations: parsedData.preferred_locations || [],
@@ -276,9 +248,12 @@ export const useResumeUpload = (
           min_salary: parsedData.min_salary || null,
           max_salary: parsedData.max_salary || null,
           preferred_work_type: parsedData.preferred_work_type || null,
-          resume_text: extractedText, // Store the full extracted text
-          public_url: publicUrl,
         });
+      }
+      
+      const { error: insertError } = await supabase
+        .from("resumes")
+        .insert(resumeData);
         
       if (insertError) {
         console.error("Database insert failed:", insertError);
@@ -290,7 +265,9 @@ export const useResumeUpload = (
       console.log("Resume upload process completed successfully");
       toast({
         title: "Resume uploaded successfully",
-        description: "Your resume has been processed and saved.",
+        description: parsedData 
+          ? "Your resume has been processed and saved."
+          : "Your resume has been saved with basic text extraction.",
       });
       
       return true;

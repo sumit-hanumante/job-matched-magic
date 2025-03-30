@@ -1,3 +1,4 @@
+
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -225,6 +226,72 @@ export const deleteResume = async (resumeId: string, userId: string) => {
     return true;
   } catch (error) {
     console.error('Error in deleteResume:', error);
+    return false;
+  }
+};
+
+/**
+ * Cleans up all resumes for a user
+ * 
+ * @param userId - The ID of the user whose resumes should be cleaned up
+ * @returns true if successful, false otherwise
+ */
+export const cleanupAllResumes = async (userId: string) => {
+  try {
+    console.log(`Starting cleanup of all resumes for user: ${userId}`);
+    
+    // First, get all resumes to find the file paths
+    const { data: resumes, error: fetchError } = await supabase
+      .from('resumes')
+      .select('id, file_path')
+      .eq('user_id', userId);
+
+    if (fetchError) {
+      console.error('Error fetching resumes for cleanup:', fetchError);
+      throw fetchError;
+    }
+
+    // If there are no resumes, we're done
+    if (!resumes || resumes.length === 0) {
+      console.log('No resumes found to clean up');
+      return true;
+    }
+
+    console.log(`Found ${resumes.length} resumes to clean up`);
+    
+    // Delete files from storage
+    const filePaths = resumes.map(resume => resume.file_path).filter(Boolean);
+    
+    if (filePaths.length > 0) {
+      console.log(`Removing ${filePaths.length} files from storage`);
+      const { error: storageError } = await supabase.storage
+        .from('resumes')
+        .remove(filePaths);
+  
+      if (storageError) {
+        console.error('Error removing resume files from storage:', storageError);
+        // Continue even if storage cleanup fails
+      } else {
+        console.log('Successfully removed all resume files from storage');
+      }
+    }
+    
+    // Delete all resume records from the database
+    console.log('Deleting all resume records from database');
+    const { error: deleteError } = await supabase
+      .from('resumes')
+      .delete()
+      .eq('user_id', userId);
+
+    if (deleteError) {
+      console.error('Error deleting resume records:', deleteError);
+      throw deleteError;
+    }
+
+    console.log('Successfully cleaned up all resumes for user');
+    return true;
+  } catch (error) {
+    console.error('Error in cleanupAllResumes:', error);
     return false;
   }
 };

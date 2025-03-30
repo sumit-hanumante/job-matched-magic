@@ -8,26 +8,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-// Create a single instance of the Supabase client with explicit auth configuration
+// Create a single instance of the Supabase client with simpler configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: typeof window !== 'undefined' ? localStorage : undefined,
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: 'implicit',
-  },
-  global: {
-    headers: {
-      'x-app-version': '1.0.0',
-      'Content-Type': 'application/json', // Ensure proper content type
-    },
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
-    },
-  },
+  }
 });
 
 console.log('Supabase client initialized with URL:', supabaseUrl);
@@ -44,7 +31,8 @@ export const initializeStorage = async () => {
     // Also check if we can invoke functions to verify setup
     try {
       await supabase.functions.invoke('parse-resume', {
-        method: 'HEAD', // Just to check if the function exists
+        method: 'POST', // Fixed the invalid method type "HEAD"
+        body: { test: true }
       });
       console.log('Successfully connected to Edge Functions API');
     } catch (funcError) {
