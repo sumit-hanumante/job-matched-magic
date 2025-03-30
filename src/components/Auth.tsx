@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -62,6 +61,7 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
 
     try {
       setLoading(true);
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -69,7 +69,6 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
           data: {
             full_name: fullName.trim(),
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
@@ -96,6 +95,7 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
         title: "Error",
         description: error instanceof Error ? error.message : "An error occurred",
       });
+      console.error("Signup error:", error);
     } finally {
       setLoading(false);
     }
@@ -136,6 +136,7 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
         title: "Error",
         description: error instanceof Error ? error.message : "An error occurred",
       });
+      console.error("Signin error:", error);
     } finally {
       setLoading(false);
     }

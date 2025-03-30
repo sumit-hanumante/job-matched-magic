@@ -8,5 +8,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-// Create a single instance of the Supabase client to be reused
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create a single instance of the Supabase client with explicit auth configuration
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: localStorage,
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+});
