@@ -30,28 +30,31 @@ export async function getJobMatches(candidateEmbedding: number[]): Promise<any[]
  */
 export async function getLastTestUserEmail(): Promise<{email: string | null, error: string | null}> {
   try {
-    // Query for the most recent test user email
+    // Query for the most recent test user - using the auth.users table via admin API is not possible
+    // Instead, we'll look for test users in the profiles table where full_name contains 'Test'
     const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name')
-      .eq('full_name', 'Test User')
+      .ilike('full_name', '%Test%')
       .order('updated_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
     if (error) {
       return { email: null, error: `Error getting profile: ${error.message}` };
     }
 
-    // Since we can't directly query auth.users, we'll use the user's preferences
-    // to indicate they exist, and provide a hint on the email format
-    if (data) {
-      const randomPart = Math.floor(Math.random() * 10000);
-      const emailHint = `tester_${randomPart}@example.com (Note: This is just a format example, the actual number differs)`;
-      return { email: `A test user exists with email pattern: tester_XXXX@example.com and password: testpassword123`, error: null };
+    // If no test users found
+    if (!data || data.length === 0) {
+      return { email: null, error: 'No test users found' };
     }
 
-    return { email: null, error: 'No test users found' };
+    // We've found a test user - now we need to update their full_name to include the email
+    // Since we can't access auth.users directly, we'll fetch the users table using the admin API
+    // For now, provide a default test user credential pattern
+    return { 
+      email: "tester@example.com (password: testpassword123) - Note: This is a placeholder. Please update the 'full_name' field in the profiles table to include the actual email.", 
+      error: null 
+    };
   } catch (error) {
     console.error("Error finding test user:", error);
     return { email: null, error: 'Internal error occurred' };
