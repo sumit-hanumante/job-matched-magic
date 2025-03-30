@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -50,9 +51,18 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
       return;
     }
 
+    if (password.length < 6) {
+      toast({
+        variant: "destructive", 
+        title: "Password Too Short",
+        description: "Password must be at least 6 characters long",
+      });
+      return;
+    }
+
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -64,14 +74,21 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
       });
 
       if (error) throw error;
-
-      toast({
-        title: "Check your email",
-        description: "We've sent you a confirmation email.",
-      });
       
-      if (onSuccess) {
-        onSuccess();
+      if (data?.user) {
+        toast({
+          title: "Account created",
+          description: "Your account has been created successfully.",
+        });
+        
+        if (onSuccess) {
+          onSuccess();
+        }
+      } else {
+        toast({
+          title: "Check your email",
+          description: "We've sent you a confirmation email.",
+        });
       }
     } catch (error) {
       toast({
@@ -104,6 +121,11 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
       });
 
       if (error) throw error;
+      
+      toast({
+        title: "Welcome back!",
+        description: "You have been signed in successfully.",
+      });
       
       if (onSuccess) {
         onSuccess();

@@ -5,7 +5,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Auth from "@/components/Auth";
 import { Skeleton } from "@/components/ui/skeleton";
-import TestUserInfo from "@/components/TestUserInfo";
 
 // Lazy load components
 const ResumeUpload = lazy(() => import("@/components/ResumeUpload"));
@@ -43,11 +42,6 @@ const Index = () => {
       <Hero onGetStarted={handleGetStarted} />
       
       <main className="container mx-auto px-4 py-16 space-y-24">
-        {/* Test User Info - will only show in non-production environments */}
-        <section className="max-w-2xl mx-auto">
-          <TestUserInfo />
-        </section>
-        
         <section id="resume" className="scroll-mt-16 max-w-2xl mx-auto animate-fade-in">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
