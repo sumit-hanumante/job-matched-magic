@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.22.0"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", // Removed x-app-version
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -35,15 +35,6 @@ serve(async (req) => {
       const body = JSON.parse(rawBody);
       console.log("Request body format => ", Object.keys(body).join(', '));
       
-      resumeText = body.resumeText;
-      
-      // Handle case where resumeUrl might be sent instead
-      if (!resumeText && body.resumeUrl) {
-        console.log("No resumeText found but resumeUrl was provided. This is not supported anymore.");
-        console.log("URL provided:", body.resumeUrl);
-        throw new Error("Direct text extraction is required. URL-based extraction is no longer supported.");
-      }
-
       // Handle test requests
       if (body.test === true) {
         console.log("Received test request, returning success");
@@ -51,6 +42,15 @@ serve(async (req) => {
           JSON.stringify({ success: true, message: "Edge function is working properly" }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+      
+      resumeText = body.resumeText;
+      
+      // Handle case where resumeUrl might be sent instead
+      if (!resumeText && body.resumeUrl) {
+        console.log("No resumeText found but resumeUrl was provided. This is not supported anymore.");
+        console.log("URL provided:", body.resumeUrl);
+        throw new Error("Direct text extraction is required. URL-based extraction is no longer supported.");
       }
     } catch (parseError) {
       console.error("JSON parsing error:", parseError);
@@ -77,6 +77,8 @@ serve(async (req) => {
           success: true,
           data: {
             resume_text: resumeText, // Just return the raw text
+            years_of_experience: null,
+            possible_job_titles: [],
           },
           message: "GEMINI_API_KEY is missing, saving raw text only."
         }),
@@ -87,7 +89,7 @@ serve(async (req) => {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    // 4. Build the prompt using the extracted resume text - UPDATED with new fields
+    // 4. Build the prompt using the extracted resume text
     const prompt = `
       Analyze the following resume text and extract the candidate's details in a format optimized for job matching.
       

@@ -110,6 +110,19 @@ export const useResumeUpload = (
         const tempFileName = `${crypto.randomUUID()}-${file.name}`;
         console.log(`Creating temporary file: ${tempFileName}`);
         
+        // First, let's ensure the buckets exist
+        try {
+          console.log("Creating or checking temp-resumes bucket");
+          await supabase.storage.createBucket('temp-resumes', {
+            public: true,
+            fileSizeLimit: 10485760 // 10MB
+          });
+          console.log("temp-resumes bucket ready");
+        } catch (bucketError) {
+          // Ignore errors about bucket already exists
+          console.log("Bucket operation result:", bucketError);
+        }
+        
         const { error: uploadError, data } = await supabase.storage
           .from("temp-resumes")
           .upload(tempFileName, file);
@@ -157,6 +170,19 @@ export const useResumeUpload = (
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
       
+      // Ensure buckets exist
+      try {
+        console.log("Creating or checking resumes bucket");
+        await supabase.storage.createBucket('resumes', {
+          public: false,
+          fileSizeLimit: 10485760 // 10MB
+        });
+        console.log("resumes bucket ready");
+      } catch (bucketError) {
+        // Ignore errors about bucket already exists
+        console.log("Bucket operation result:", bucketError);
+      }
+      
       console.log(`Step 3: Uploading file to storage: ${filePath}`);
       const { error: uploadError } = await supabase.storage
         .from("resumes")
@@ -186,7 +212,8 @@ export const useResumeUpload = (
         
         const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
           method: "POST",
-          body: { resumeText: extractedText },
+          body: JSON.stringify({ resumeText: extractedText }),
+          headers: { "Content-Type": "application/json" }
         });
         
         if (parseError) {
