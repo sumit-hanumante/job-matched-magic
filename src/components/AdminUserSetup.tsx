@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { createAdminUser } from "@/scripts/createTestUsers";
+import { toast } from "@/components/ui/use-toast";
 
 const AdminUserSetup = () => {
   const [isCreating, setIsCreating] = useState(false);
@@ -23,15 +24,27 @@ const AdminUserSetup = () => {
         ).join(' '));
       };
       
-      await createAdminUser();
+      const user = await createAdminUser();
       
       // Restore original console.log
       console.log = originalConsoleLog;
       
       // Set the captured logs as result
       setResult(logs.join('\n'));
+      
+      if (user) {
+        toast({
+          title: "Admin User Created",
+          description: "Admin user sumit@example.com was created successfully.",
+        });
+      }
     } catch (error) {
       setResult(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      toast({
+        title: "Error Creating Admin User",
+        description: `${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
+      });
     } finally {
       setIsCreating(false);
     }
