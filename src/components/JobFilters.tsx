@@ -24,26 +24,11 @@ export const JobFilters = ({
   onFetchJobs,
   isScrapingJobs
 }: JobFiltersProps) => {
-  const handleSourceChange = (value: string) => {
-    console.log('Source change clicked:', value);
-    onSourceChange(value);
-  };
-
-  const handleRefreshClick = () => {
-    console.log('Refresh clicked');
-    onRefresh();
-  };
-
-  const handleFetchJobsClick = () => {
-    console.log('Fetch jobs clicked');
-    onFetchJobs();
-  };
-
   return (
     <div className="flex flex-col sm:flex-row gap-2">
       <Select 
         value={selectedSource}
-        onValueChange={handleSourceChange}
+        onValueChange={onSourceChange}
       >
         <SelectTrigger className="w-[180px] bg-white z-40">
           <SelectValue placeholder="Select source">
@@ -79,7 +64,7 @@ export const JobFilters = ({
       </Select>
 
       <Button 
-        onClick={handleRefreshClick}
+        onClick={onRefresh}
         variant="outline"
         className="whitespace-nowrap bg-white"
       >
@@ -87,7 +72,7 @@ export const JobFilters = ({
       </Button>
 
       <Button 
-        onClick={handleFetchJobsClick}
+        onClick={onFetchJobs}
         disabled={isScrapingJobs}
         className="whitespace-nowrap bg-primary text-white"
       >

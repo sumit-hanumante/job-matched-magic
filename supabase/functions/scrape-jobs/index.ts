@@ -22,60 +22,7 @@ interface Job {
   posted_date: string;
 }
 
-async function fetchAdzunaJobsApproach1(jobType: string): Promise<{ jobs: Job[]; error?: string }> {
-  try {
-    const appId = Deno.env.get('ADZUNA_APP_ID');
-    const appKey = Deno.env.get('ADZUNA_APP_KEY');
-    
-    if (!appId || !appKey) {
-      console.error('Approach 1 - Missing credentials');
-      return { jobs: [], error: 'Adzuna credentials missing' };
-    }
-
-    console.log('Approach 1 - Using credentials:', { appId: appId.slice(0,4) + '...', appKey: appKey.slice(0,4) + '...' });
-
-    const url = new URL('https://api.adzuna.com/v1/api/jobs/in/search/1');
-    url.searchParams.append('app_id', appId);
-    url.searchParams.append('app_key', appKey);
-    url.searchParams.append('results_per_page', '100');
-    url.searchParams.append('what', jobType);
-    url.searchParams.append('content-type', 'application/json');
-
-    console.log('Approach 1 - Full URL:', url.toString());
-    
-    const response = await fetch(url.toString());
-    const responseText = await response.text();
-    
-    if (!response.ok) {
-      console.error('Approach 1 - Error response:', responseText);
-      throw new Error(`Adzuna API error: ${response.status} - ${responseText}`);
-    }
-
-    const data = JSON.parse(responseText);
-    console.log('Approach 1 - Successful response with', data.results?.length || 0, 'jobs');
-
-    return {
-      jobs: (data.results || []).map((job: any) => ({
-        title: job.title?.replace(/<\/?[^>]+(>|$)/g, "").trim() || 'Unknown Title',
-        company: job.company?.display_name || 'Unknown Company',
-        location: job.location?.display_name || 'India',
-        description: job.description || '',
-        apply_url: job.redirect_url,
-        source: 'adzuna',
-        external_job_id: `az1_${job.id}`,
-        salary_min: job.salary_min,
-        salary_max: job.salary_max,
-        salary_range: job.salary_min ? `₹${job.salary_min.toLocaleString()}` : undefined,
-        posted_date: new Date(job.created || Date.now()).toISOString()
-      }))
-    };
-  } catch (error) {
-    console.error('Approach 1 detailed error:', error);
-    return { jobs: [], error: error.message };
-  }
-}
-
-async function fetchAdzunaJobsApproach2(jobType: string): Promise<{ jobs: Job[]; error?: string }> {
+async function fetchAdzunaJobs(jobType: string, approach: number): Promise<{ jobs: Job[]; error?: string }> {
   try {
     const appId = Deno.env.get('ADZUNA_APP_ID');
     const appKey = Deno.env.get('ADZUNA_APP_KEY');
@@ -84,67 +31,29 @@ async function fetchAdzunaJobsApproach2(jobType: string): Promise<{ jobs: Job[];
       return { jobs: [], error: 'Adzuna credentials missing' };
     }
 
-    const baseUrl = 'https://api.adzuna.com/v1/api/jobs/in/search/1';
-    const url = `${baseUrl}?app_id=${appId}&app_key=${appKey}&results_per_page=20&what=${jobType}&content-type=application/json`;
-    
-    console.log('Approach 2 - Fetching jobs...');
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Approach 2 - Results:', data.results?.length || 0);
-
-    return {
-      jobs: (data.results || []).map((job: any) => ({
-        title: job.title?.replace(/<\/?[^>]+(>|$)/g, "").trim() || 'Unknown Title',
-        company: job.company?.display_name || 'Unknown Company',
-        location: job.location?.display_name || 'India',
-        description: job.description || '',
-        apply_url: job.redirect_url,
-        source: 'adzuna',
-        external_job_id: `az2_${job.id}`,
-        salary_min: job.salary_min,
-        salary_max: job.salary_max,
-        salary_range: job.salary_min ? `₹${job.salary_min.toLocaleString()}` : undefined,
-        posted_date: new Date(job.created || Date.now()).toISOString()
-      }))
-    };
-  } catch (error) {
-    console.error('Approach 2 error:', error);
-    return { jobs: [], error: error.message };
-  }
-}
-
-async function fetchAdzunaJobsApproach3(jobType: string): Promise<{ jobs: Job[]; error?: string }> {
-  try {
-    const appId = Deno.env.get('ADZUNA_APP_ID');
-    const appKey = Deno.env.get('ADZUNA_APP_KEY');
-    
-    if (!appId || !appKey) {
-      return { jobs: [], error: 'Adzuna credentials missing' };
-    }
-
+    // Build URL with params
     const url = new URL('https://api.adzuna.com/v1/api/jobs/in/search/1');
     const params = {
       app_id: appId,
       app_key: appKey,
       results_per_page: '20',
       what: jobType,
-      where: 'india',
-      content_type: 'application/json',
-      category: 'it-jobs'
+      content_type: 'application/json'
     };
 
+    // Add parameters to URL
     Object.entries(params).forEach(([key, value]) => {
       url.searchParams.append(key, value);
     });
-
-    console.log('Approach 3 - Fetching from:', url.toString());
     
+    // Add approach-specific parameters
+    if (approach === 2) {
+      // Default parameters are fine
+    } else if (approach === 3) {
+      url.searchParams.append('where', 'india');
+      url.searchParams.append('category', 'it-jobs');
+    }
+
     const response = await fetch(url.toString());
     
     if (!response.ok) {
@@ -152,8 +61,7 @@ async function fetchAdzunaJobsApproach3(jobType: string): Promise<{ jobs: Job[];
     }
 
     const data = await response.json();
-    console.log('Approach 3 - Results:', data.results?.length || 0);
-
+    
     return {
       jobs: (data.results || []).map((job: any) => ({
         title: job.title?.replace(/<\/?[^>]+(>|$)/g, "").trim() || 'Unknown Title',
@@ -162,7 +70,7 @@ async function fetchAdzunaJobsApproach3(jobType: string): Promise<{ jobs: Job[];
         description: job.description || '',
         apply_url: job.redirect_url,
         source: 'adzuna',
-        external_job_id: `az3_${job.id}`,
+        external_job_id: `az${approach}_${job.id}`,
         salary_min: job.salary_min,
         salary_max: job.salary_max,
         salary_range: job.salary_min ? `₹${job.salary_min.toLocaleString()}` : undefined,
@@ -170,7 +78,6 @@ async function fetchAdzunaJobsApproach3(jobType: string): Promise<{ jobs: Job[];
       }))
     };
   } catch (error) {
-    console.error('Approach 3 error:', error);
     return { jobs: [], error: error.message };
   }
 }
@@ -181,10 +88,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting job fetching process with detailed logging...');
-    
     const { jobType = "software developer" } = await req.json();
-    console.log('Fetching jobs for type:', jobType);
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -193,31 +97,14 @@ serve(async (req) => {
       throw new Error('Missing Supabase credentials');
     }
     
-    // Fixed: import createClient correctly
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Try all approaches in parallel
-    console.log('Attempting all approaches for job type:', jobType);
     const [approach1Result, approach2Result, approach3Result] = await Promise.all([
-      fetchAdzunaJobsApproach1(jobType).catch(error => ({ jobs: [], error: error.message })),
-      fetchAdzunaJobsApproach2(jobType).catch(error => ({ jobs: [], error: error.message })),
-      fetchAdzunaJobsApproach3(jobType).catch(error => ({ jobs: [], error: error.message }))
+      fetchAdzunaJobs(jobType, 1).catch(error => ({ jobs: [], error: error.message })),
+      fetchAdzunaJobs(jobType, 2).catch(error => ({ jobs: [], error: error.message })),
+      fetchAdzunaJobs(jobType, 3).catch(error => ({ jobs: [], error: error.message }))
     ]);
-
-    console.log('Results from approaches:', {
-      approach1: {
-        jobCount: approach1Result.jobs.length,
-        hasError: !!approach1Result.error
-      },
-      approach2: {
-        jobCount: approach2Result.jobs.length,
-        hasError: !!approach2Result.error
-      },
-      approach3: {
-        jobCount: approach3Result.jobs.length,
-        hasError: !!approach3Result.error
-      }
-    });
 
     // Combine successful results
     const allJobs = [
@@ -225,8 +112,6 @@ serve(async (req) => {
       ...approach2Result.jobs,
       ...approach3Result.jobs
     ];
-
-    console.log(`Total jobs fetched: ${allJobs.length}`);
 
     if (allJobs.length === 0) {
       return new Response(
@@ -269,18 +154,9 @@ serve(async (req) => {
         success: true,
         message: `Successfully processed ${allJobs.length} jobs`,
         stats: {
-          approach1: {
-            jobs: approach1Result.jobs.length,
-            error: approach1Result.error
-          },
-          approach2: {
-            jobs: approach2Result.jobs.length,
-            error: approach2Result.error
-          },
-          approach3: {
-            jobs: approach3Result.jobs.length,
-            error: approach3Result.error
-          }
+          approach1: { jobs: approach1Result.jobs.length, error: approach1Result.error },
+          approach2: { jobs: approach2Result.jobs.length, error: approach2Result.error },
+          approach3: { jobs: approach3Result.jobs.length, error: approach3Result.error }
         }
       }),
       {
@@ -290,16 +166,9 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Fatal error in job fetching:', error);
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-        timestamp: new Date().toISOString()
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error occurred' }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

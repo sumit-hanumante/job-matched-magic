@@ -26,13 +26,11 @@ export const useJobList = ({ initialJobs, user, onLoginRequired }: UseJobListPro
   const isAdmin = user?.email === ADMIN_EMAIL;
 
   const handleSourceChange = useCallback((source: string) => {
-    console.log('Source changed to:', source);
     setSelectedSource(source);
     setCurrentPage(1); // Reset to first page when filter changes
   }, []);
 
   const handleJobTypeChange = useCallback((type: string) => {
-    console.log('Job type changed to:', type);
     setSelectedJobType(type);
     setCurrentPage(1); // Reset to first page when filter changes
   }, []);
@@ -49,7 +47,6 @@ export const useJobList = ({ initialJobs, user, onLoginRequired }: UseJobListPro
   }, [user, onLoginRequired]);
 
   const fetchJobs = useCallback(async () => {
-    console.log("Fetching jobs with source:", selectedSource);
     setIsLoading(true);
     
     try {
@@ -61,7 +58,7 @@ export const useJobList = ({ initialJobs, user, onLoginRequired }: UseJobListPro
 
       const { data: jobsData, error } = await query
         .order('posted_date', { ascending: false })
-        .limit(50); // Fetch more than we show per page to reduce subsequent API calls
+        .limit(50);
 
       if (error) throw error;
 
@@ -93,7 +90,6 @@ export const useJobList = ({ initialJobs, user, onLoginRequired }: UseJobListPro
         description: "Jobs refreshed successfully",
       });
     } catch (error) {
-      console.error('Error fetching jobs:', error);
       toast({
         title: "Error",
         description: "Failed to fetch jobs.",
@@ -111,8 +107,6 @@ export const useJobList = ({ initialJobs, user, onLoginRequired }: UseJobListPro
       setIsScrapingJobs(true);
       setScrapingError(null);
       
-      console.log("Fetching new jobs with type:", selectedJobType);
-      
       const { data, error } = await supabase.functions.invoke('scrape-jobs', {
         body: { jobType: selectedJobType }
       });
@@ -129,7 +123,6 @@ export const useJobList = ({ initialJobs, user, onLoginRequired }: UseJobListPro
       await fetchJobs();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch new jobs';
-      console.error('Error scraping jobs:', errorMessage);
       setScrapingError(errorMessage);
       toast({
         title: "Error",
