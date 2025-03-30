@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { getLastTestUserEmail } from '@/lib/matchers/vectorMatchers';
 import { Button } from './ui/button';
 import { toast } from './ui/use-toast';
@@ -33,7 +33,8 @@ const TestUserInfo = () => {
         setError("No test user information found");
       }
     } catch (err) {
-      setError("An unexpected error occurred");
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(errorMessage);
       console.error(err);
     } finally {
       setLoading(false);

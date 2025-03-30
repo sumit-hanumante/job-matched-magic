@@ -11,7 +11,7 @@ export async function getJobMatches(candidateEmbedding: number[]): Promise<any[]
     // Call the stored procedure "match_jobs" using supabase.rpc
     // The PostgreSQL vector type expects the array to be properly formatted
     const { data, error } = await supabase.rpc("match_jobs", { 
-      candidate_vector: candidateEmbedding 
+      candidate_vector: candidateEmbedding as unknown as string 
     });
     
     if (error) {
