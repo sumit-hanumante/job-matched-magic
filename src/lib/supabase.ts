@@ -23,15 +23,47 @@ console.log('Supabase client initialized with URL:', supabaseUrl);
 export const initializeStorage = async () => {
   try {
     console.log('Checking storage buckets...');
-    // Check if we can access the resumes bucket
-    await supabase.storage.getBucket('resumes');
-    await supabase.storage.getBucket('temp-resumes');
+    
+    try {
+      // Check if we can access the resumes bucket
+      await supabase.storage.getBucket('resumes');
+      console.log('Resumes bucket exists');
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('does not exist')) {
+        // Create the buckets if they don't exist
+        console.log('Creating resumes bucket...');
+        await supabase.storage.createBucket('resumes', {
+          public: false,
+          fileSizeLimit: 10485760 // 10MB
+        });
+      } else {
+        throw error;
+      }
+    }
+    
+    try {
+      // Check if we can access the temp-resumes bucket
+      await supabase.storage.getBucket('temp-resumes');
+      console.log('Temp-resumes bucket exists');
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('does not exist')) {
+        // Create the buckets if they don't exist
+        console.log('Creating temp-resumes bucket...');
+        await supabase.storage.createBucket('temp-resumes', {
+          public: true,
+          fileSizeLimit: 10485760 // 10MB
+        });
+      } else {
+        throw error;
+      }
+    }
+    
     console.log('Storage buckets initialized successfully');
     
     // Also check if we can invoke functions to verify setup
     try {
       await supabase.functions.invoke('parse-resume', {
-        method: 'POST', // Fixed the invalid method type "HEAD"
+        method: 'POST',
         body: { test: true }
       });
       console.log('Successfully connected to Edge Functions API');

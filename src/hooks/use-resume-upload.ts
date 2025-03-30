@@ -182,9 +182,7 @@ export const useResumeUpload = (
       
       let parsedData = null;
       try {
-        console.log("Calling edge function with full request body:", {
-          resumeText: extractedText.substring(0, 100) + "..." // Log just the start for brevity
-        });
+        console.log("Calling edge function with text length:", extractedText.length);
         
         const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
           method: "POST",
