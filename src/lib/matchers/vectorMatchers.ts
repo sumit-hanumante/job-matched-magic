@@ -9,7 +9,11 @@ import { supabase } from "@/integrations/supabase/client";
 export async function getJobMatches(candidateEmbedding: number[]): Promise<any[]> {
   try {
     // Call the stored procedure "match_jobs" using supabase.rpc
-    const { data, error } = await supabase.rpc("match_jobs", { candidate_vector: candidateEmbedding });
+    // Convert the candidateEmbedding array to a properly formatted vector parameter
+    const { data, error } = await supabase.rpc("match_jobs", { 
+      candidate_vector: candidateEmbedding 
+    });
+    
     if (error) {
       throw new Error(`RPC error: ${error.message}`);
     }
