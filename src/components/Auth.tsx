@@ -63,7 +63,8 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
     try {
       setLoading(true);
       
-      // First, sign up the user
+      console.log("Starting signup process");
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -76,7 +77,8 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
 
       if (error) throw error;
       
-      // Successfully created account
+      console.log("Signup successful", data);
+      
       toast({
         title: "Account created",
         description: "Your account has been created successfully.",
@@ -86,7 +88,7 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
         onSuccess();
       }
     } catch (error) {
-      console.error("Signup detailed error:", error);
+      console.error("Signup error details:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -111,12 +113,16 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
 
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log("Starting signin process");
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
+      
+      console.log("Signin successful", data);
       
       toast({
         title: "Welcome back!",
@@ -127,12 +133,12 @@ const Auth = ({ onSuccess, defaultEmail = "", defaultName = "" }: AuthProps) => 
         onSuccess();
       }
     } catch (error) {
+      console.error("Signin error details:", error);
       toast({
         variant: "destructive",
         title: "Error",
         description: error instanceof Error ? error.message : "An error occurred",
       });
-      console.error("Signin error:", error);
     } finally {
       setLoading(false);
     }

@@ -11,7 +11,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create a single instance of the Supabase client with explicit auth configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: localStorage,
+    storage: typeof window !== 'undefined' ? localStorage : undefined,
     persistSession: true,
     autoRefreshToken: true,
   }
