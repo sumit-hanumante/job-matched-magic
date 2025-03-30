@@ -3,6 +3,7 @@ import { ArrowDown, Search, Target, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 interface HeroProps {
   onGetStarted?: () => void;

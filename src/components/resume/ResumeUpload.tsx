@@ -24,7 +24,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Fetch the latest resume on user login
   useEffect(() => {
     if (user) {
       fetchCurrentResume();
@@ -49,11 +48,9 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       }
 
       if (data) {
-        // Update local state with parsed data
         setCurrentResume(prev => ({
           ...prev,
           status: 'parsed',
-          // parsedData // Add this to your state interface if needed
         }));
       } else {
         setCurrentResume(null);
@@ -63,7 +60,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
-  // Handle drag-and-drop events
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -103,7 +99,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
-  // Shift existing resumes to maintain a maximum of 3
   const shiftResumes = async (userId: string) => {
     try {
       const { data: resumes, error: fetchError } = await supabase
@@ -133,7 +128,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
-  // Upload and process the resume
   const uploadResume = async () => {
     if (!file) return;
 
@@ -142,7 +136,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
 
     try {
       if (!user) {
-        // Handle unauthenticated upload
         const tempFileName = `${crypto.randomUUID()}-${file.name}`;
         const { error: uploadError, data } = await supabase.storage
           .from("temp-resumes")
@@ -165,15 +158,12 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         return;
       }
 
-      // Authenticated user flow
-      console.log("Uploading resume for authenticated user...");
       await shiftResumes(user.id);
 
       const fileExt = file.name.split(".").pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("resumes")
         .upload(filePath, file);
@@ -182,7 +172,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
 
       console.log(`File uploaded to: ${filePath}`);
 
-      // Insert resume metadata into database
       const { error: insertError, data: resumeData } = await supabase
         .from("resumes")
         .insert({
@@ -205,54 +194,38 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         .from("resumes")
         .getPublicUrl(filePath);
 
-        console.log("Generated public URL:", publicUrl); // Add this line
+      console.log("Generated public URL:", publicUrl);
 
       toast({
         title: "Resume uploaded",
         description: "Analyzing your resume...",
       });
 
-      // Invoke server-side parsing
       console.log("Invoking parse-resume function with URL:", publicUrl);
       console.log("Public URL being sent:", publicUrl);
-if (!publicUrl) {
-  console.error("Public URL is empty! Check your Supabase storage configuration.");
-  toast({
-    variant: "destructive",
-    title: "Upload Failed",
-    description: "The public URL could not be generated. Please check your Supabase storage settings.",
-  });
-  setIsProcessing(false);
-  return; // Stop the upload process
-}
 
-const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
-  method: "POST",
-  body: JSON.stringify({ resumeUrl: publicUrl }),
-  headers: { "Content-Type": "application/json" },
-});
+      const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
+        method: "POST",
+        body: JSON.stringify({ resumeUrl: publicUrl }),
+        headers: { "Content-Type": "application/json" },
+      });
 
-      
-      
-      
       if (parseError) {
         throw parseError;
       }
 
       console.log("Parse response:", parseData);
-      
 
       if (!parseData.success) {
         throw new Error(parseData.error || "Failed to parse resume");
       }
-      // Store parsed data in local state instead of DB
+
       const parsedData = parseData.data;
       toast({
         title: "Resume analyzed successfully",
         description: "Your resume has been processed!",
       });
 
-      // Update resume status
       await supabase
         .from("resumes")
         .update({ status: "parsed" })
@@ -282,6 +255,10 @@ const { data: parseData, error: parseError } = await supabase.functions.invoke("
     setFile(null);
     const fileInput = document.getElementById("file-upload") as HTMLInputElement;
     if (fileInput) fileInput.value = "";
+  };
+
+  const handleCancel = () => {
+    resetFileInput();
   };
 
   return (
@@ -315,6 +292,7 @@ const { data: parseData, error: parseError } = await supabase.functions.invoke("
           file={file}
           isUploading={isProcessing}
           onUpload={uploadResume}
+          onCancel={handleCancel}
           isAuthenticated={!!user}
         />
       )}
