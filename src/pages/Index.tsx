@@ -1,4 +1,3 @@
-
 import Hero from "@/components/Hero";
 import ResumeUpload from "@/components/ResumeUpload";
 import JobList from "@/components/JobList";
@@ -7,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import JobMatches from "@/components/JobMatches";
+import AdminUserSetup from "@/components/AdminUserSetup";
 
 const Index = () => {
   const { user } = useAuth();
@@ -30,6 +30,10 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       <Hero onGetStarted={handleGetStarted} />
+      
+      <div className="container mx-auto mt-8 px-4">
+        <AdminUserSetup />
+      </div>
       
       <main className="container mx-auto px-4 py-16 space-y-24">
         <section id="resume" className="scroll-mt-16 max-w-2xl mx-auto animate-fade-in">

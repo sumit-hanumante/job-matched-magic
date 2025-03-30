@@ -1,17 +1,34 @@
 
 import { supabase } from "@/lib/supabase";
 
-// This is a utility script to create test users
+// This is a utility script to create an admin user
 // You can run this file directly or copy the code to the browser console
 
-const createTestUsers = async () => {
-  console.log("Creating test users...");
+const createAdminUser = async () => {
+  console.log("Checking for admin user...");
   
   try {
-    // Create super user
-    const { data: superUser, error: superUserError } = await supabase.auth.signUp({
+    // First check if user already exists
+    const { data: existingUsers, error: searchError } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('email', 'sumit@example.com')
+      .maybeSingle();
+      
+    if (searchError) {
+      console.error("Error checking for existing user:", searchError);
+      return;
+    }
+    
+    if (existingUsers) {
+      console.log("Admin user already exists:", existingUsers);
+      return;
+    }
+    
+    // Create admin user
+    const { data: adminUser, error: adminUserError } = await supabase.auth.signUp({
       email: "sumit@example.com",
-      password: "123",
+      password: "123456",
       options: {
         data: {
           full_name: "Sumit Admin",
@@ -19,32 +36,22 @@ const createTestUsers = async () => {
       }
     });
 
-    if (superUserError) throw superUserError;
-    console.log("Super user created:", superUser);
+    if (adminUserError) throw adminUserError;
+    console.log("Admin user created:", adminUser);
 
-    // Create normal user
-    const { data: normalUser, error: normalUserError } = await supabase.auth.signUp({
-      email: "test@example.com",
-      password: "123",
-      options: {
-        data: {
-          full_name: "Test User",
-        },
-      }
-    });
+    // In a production environment, you would typically have a separate function
+    // to set user roles in a user_roles table, but for this example,
+    // we'll mark the successful creation
+    console.log("✅ Admin user created successfully!");
+    console.log("Note: In a real application, you should set up a user_roles table and assign the admin role there.");
+    console.log("For now, you can log in with sumit@example.com / 123456");
     
-    if (normalUserError) throw normalUserError;
-    console.log("Normal user created:", normalUser);
+    return adminUser;
 
-    console.log("✅ Test users created successfully!");
-    console.log("Note: You may need to confirm their emails in the Supabase dashboard.");
   } catch (error) {
-    console.error("Error creating test users:", error);
+    console.error("Error creating admin user:", error);
   }
 };
 
-// Run the function
-createTestUsers();
-
-// Export for potential import elsewhere
-export { createTestUsers };
+// Export for use elsewhere, but don't run automatically
+export { createAdminUser };
