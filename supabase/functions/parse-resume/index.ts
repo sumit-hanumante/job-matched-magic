@@ -1,6 +1,4 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.22.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,12 +13,15 @@ serve(async (req) => {
   }
 
   console.log("----- parse-resume function: START -----");
+  const startTime = Date.now();
 
   try {
     // 1. Read and parse request body
     const rawBody = await req.text();
     console.log(`Raw request body received, length: ${rawBody.length}`);
-    console.log(`First 100 chars: ${rawBody.substring(0, 100)}...`);
+    if (rawBody.length > 0) {
+      console.log(`First 100 chars: ${rawBody.substring(0, 100)}...`);
+    }
     
     if (!rawBody || rawBody.length === 0) {
       throw new Error("Request body is empty");
@@ -59,38 +60,47 @@ serve(async (req) => {
       );
     }
     
-    // 3. Build the prompt for resume parsing
+    console.log("GEMINI_API_KEY found with length:", geminiApiKey.length);
+    
+    // 3. Build the prompt for resume parsing - 20% shorter but keeping all essential parts
     const prompt = `
-      Analyze the following resume text and extract the candidate's details in a format optimized for job matching.
+      Analyze this resume and extract details in JSON format optimized for job matching:
       
-      Return a JSON object with these keys:
+      Return a JSON with these keys:
       - personal_information (name, email, phone, location)
-      - summary (a brief overview of the candidate)
-      - extracted_skills (an array of technical skills, soft skills, and tools the candidate knows)
-      - experience (detailed work history with company, role, dates, and responsibilities)
+      - summary (brief candidate overview)
+      - extracted_skills (array of technical skills, soft skills, tools)
+      - experience (work history with company, role, dates, responsibilities)
       - education (degrees, institutions, dates)
-      - projects (name, description, technologies used)
-      - preferred_locations (array of locations the candidate prefers to work in, extract from their current location and any mentioned preferences)
+      - projects (name, description, technologies)
+      - preferred_locations (array of locations preferred)
       - preferred_companies (array of company names the candidate has mentioned interest in)
-      - min_salary (extract minimum expected salary if mentioned, as a number without currency symbols)
-      - max_salary (extract maximum expected salary if mentioned, as a number without currency symbols)
-      - preferred_work_type (remote, hybrid, on-site, etc.)
-      - years_of_experience (total years of professional experience as a number)
-      - possible_job_titles (array of job titles that would be suitable for this candidate based on their skills and experience)
+      - min_salary (minimum salary as number without currency symbols)
+      - max_salary (maximum salary as number without currency symbols)
+      - preferred_work_type (remote, hybrid, on-site)
+      - years_of_experience (total years of experience as number)
+      - possible_job_titles (suitable job titles based on skills/experience)
       
-      Format the skills as a clean array of strings, not nested objects, to enable easier matching with job requirements.
-      Make sure salary values are numeric only (no currency symbols or text).
-      For possible_job_titles, include both current and potential roles they could apply for based on their skills and experience.
+      Keep skills as a clean array of strings. Salary values should be numeric only.
       
       Resume text:
       ${resumeText}
     `;
 
-    // 4. Direct API call to Gemini using fetch (similar to your working curl command)
-    console.log("Making direct API call to Gemini...");
+    console.log("Prepared prompt with length:", prompt.length);
+    console.log("API call preparation complete, making request to Gemini API...");
+
+    // 4. Direct API call to Gemini using fetch
     try {
+      const apiStartTime = Date.now();
+      console.log(`Using Gemini API with key starting with: ${geminiApiKey.substring(0, 4)}...`);
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
       
+      console.log("Making API request to:", apiUrl);
+      console.log("Request payload size:", JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      }).length);
+
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -107,6 +117,9 @@ serve(async (req) => {
         })
       });
       
+      console.log(`Gemini API response received in ${Date.now() - apiStartTime}ms`);
+      console.log(`Response status: ${response.status} ${response.statusText}`);
+      
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Gemini API error: ${response.status} ${response.statusText}`);
@@ -116,21 +129,23 @@ serve(async (req) => {
       
       const responseData = await response.json();
       console.log("Received response from Gemini API");
+      console.log("Response structure:", JSON.stringify(Object.keys(responseData)));
       
       if (!responseData.candidates || responseData.candidates.length === 0) {
-        console.error("No candidates in Gemini response:", responseData);
+        console.error("No candidates in Gemini response:", JSON.stringify(responseData));
         throw new Error("No content in Gemini API response");
       }
       
       // Extract the text from the response
       const candidateContent = responseData.candidates[0].content;
       if (!candidateContent || !candidateContent.parts || candidateContent.parts.length === 0) {
-        console.error("Unexpected Gemini response format:", responseData);
+        console.error("Unexpected Gemini response format:", JSON.stringify(responseData));
         throw new Error("Unexpected Gemini response format");
       }
       
       const rawText = candidateContent.parts[0].text;
       console.log(`Raw text response length: ${rawText.length}`);
+      console.log(`Response preview: ${rawText.substring(0, 150)}...`);
       
       // 5. Parse the JSON from the response
       let parsedData;
@@ -139,8 +154,10 @@ serve(async (req) => {
         const jsonMatch = rawText.match(/\{[\s\S]*\}/);
         const jsonString = jsonMatch ? jsonMatch[0] : rawText;
         
+        console.log("Attempting to parse JSON from response...");
         parsedData = JSON.parse(jsonString);
         console.log("Successfully parsed JSON response");
+        console.log("Parsed data keys:", Object.keys(parsedData));
         
       } catch (parseErr) {
         console.error("Failed to parse Gemini response as JSON:", parseErr);
@@ -167,12 +184,17 @@ serve(async (req) => {
       };
       
       console.log("Successfully formatted data, returning response");
+      console.log("Skills count:", formattedData.extracted_skills.length);
+      if (formattedData.extracted_skills.length > 0) {
+        console.log("Sample skills:", formattedData.extracted_skills.slice(0, 5));
+      }
       
       // 7. Return the structured data
       return new Response(
         JSON.stringify({
           success: true,
-          data: formattedData
+          data: formattedData,
+          processingTime: Date.now() - startTime
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -199,10 +221,11 @@ serve(async (req) => {
         success: false,
         error: error.message || "Failed to process request",
         errorType: error.name || "Unknown",
+        processingTime: Date.now() - startTime
       }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } finally {
-    console.log("----- parse-resume function: END -----");
+    console.log(`----- parse-resume function: END (took ${Date.now() - startTime}ms) -----`);
   }
 });
