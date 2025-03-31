@@ -19,6 +19,8 @@ serve(async (req) => {
   try {
     // 1. Read and parse request body
     const rawBody = await req.text();
+    console.log(`Raw request body received, length: ${rawBody.length}`);
+    console.log(`First 100 chars: ${rawBody.substring(0, 100)}...`);
     
     if (!rawBody || rawBody.length === 0) {
       throw new Error("Request body is empty");
@@ -26,6 +28,7 @@ serve(async (req) => {
 
     // Parse JSON expecting 'resumeText'
     let { resumeText, test } = JSON.parse(rawBody);
+    console.log(`Request body format => ${test ? ' test' : ' resumeText'}`);
     
     // Handle test requests
     if (test === true) {
@@ -42,7 +45,7 @@ serve(async (req) => {
     
     console.log(`Parsed resumeText length: ${resumeText.length}`);
     
-    // 2. Initialize Gemini API
+    // 2. Get the API key and validate it
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiApiKey) {
       console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
@@ -56,21 +59,7 @@ serve(async (req) => {
       );
     }
     
-    console.log("Initializing Gemini API");
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    
-    // 3. Set up the extraction model with basic config
-    const extractionModel = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        temperature: 0.2,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-      }
-    });
-    
-    // 4. Build the prompt
+    // 3. Build the prompt for resume parsing
     const prompt = `
       Analyze the following resume text and extract the candidate's details in a format optimized for job matching.
       
@@ -89,39 +78,77 @@ serve(async (req) => {
       - years_of_experience (total years of professional experience as a number)
       - possible_job_titles (array of job titles that would be suitable for this candidate based on their skills and experience)
       
-      Format the response as a valid JSON object.
+      Format the skills as a clean array of strings, not nested objects, to enable easier matching with job requirements.
+      Make sure salary values are numeric only (no currency symbols or text).
+      For possible_job_titles, include both current and potential roles they could apply for based on their skills and experience.
       
       Resume text:
       ${resumeText}
     `;
-    
-    console.log("Sending prompt to Gemini");
-    console.log("Making API call to Gemini...");
-    
+
+    // 4. Direct API call to Gemini using fetch (similar to your working curl command)
+    console.log("Making direct API call to Gemini...");
     try {
-      // 5. Make the API call
-      const result = await extractionModel.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+      
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: prompt }
+              ]
+            }
+          ]
+        })
       });
       
-      const rawGeminiResponse = await result.response.text();
-      console.log(`Gemini response received, length: ${rawGeminiResponse.length}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Gemini API error: ${response.status} ${response.statusText}`);
+        console.error(`Error details: ${errorText}`);
+        throw new Error(`Gemini API returned error ${response.status}: ${errorText}`);
+      }
       
-      // 6. Parse the response
+      const responseData = await response.json();
+      console.log("Received response from Gemini API");
+      
+      if (!responseData.candidates || responseData.candidates.length === 0) {
+        console.error("No candidates in Gemini response:", responseData);
+        throw new Error("No content in Gemini API response");
+      }
+      
+      // Extract the text from the response
+      const candidateContent = responseData.candidates[0].content;
+      if (!candidateContent || !candidateContent.parts || candidateContent.parts.length === 0) {
+        console.error("Unexpected Gemini response format:", responseData);
+        throw new Error("Unexpected Gemini response format");
+      }
+      
+      const rawText = candidateContent.parts[0].text;
+      console.log(`Raw text response length: ${rawText.length}`);
+      
+      // 5. Parse the JSON from the response
       let parsedData;
       try {
-        // Clean the response if it contains markdown code blocks
-        const cleanedResponse = rawGeminiResponse.replace(/```json|```/g, '').trim();
-        parsedData = JSON.parse(cleanedResponse);
+        // Find JSON in the text (in case the model wrapped it with markdown)
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : rawText;
+        
+        parsedData = JSON.parse(jsonString);
         console.log("Successfully parsed JSON response");
         
       } catch (parseErr) {
-        console.error("Failed to parse Gemini response:", parseErr);
-        console.error("Raw Gemini response:", rawGeminiResponse);
+        console.error("Failed to parse Gemini response as JSON:", parseErr);
+        console.error("Raw text response:", rawText);
         throw new Error("Failed to parse AI response as valid JSON");
       }
       
-      // 7. Format the data with defaults if fields are missing
+      // 6. Format the data with defaults if fields are missing
       const formattedData = {
         personal_information: parsedData.personal_information || {},
         summary: parsedData.summary || "",
@@ -141,7 +168,7 @@ serve(async (req) => {
       
       console.log("Successfully formatted data, returning response");
       
-      // 8. Return the structured data
+      // 7. Return the structured data
       return new Response(
         JSON.stringify({
           success: true,
@@ -149,13 +176,15 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    } catch (aiError) {
-      console.error("Error calling Gemini API:", aiError);
+      
+    } catch (apiError) {
+      console.error("Error calling Gemini API:", apiError);
+      console.error("Error details:", apiError.stack || "No stack trace available");
       
       return new Response(
         JSON.stringify({
           success: false,
-          error: `AI processing error: ${aiError.message || "Unknown error"}`,
+          error: `AI processing error: ${apiError.message || "Unknown error"}`,
           errorType: "AIProcessingError"
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -163,6 +192,7 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error("Error in parse-resume:", error);
+    console.error("Error stack:", error.stack || "No stack trace available");
     
     return new Response(
       JSON.stringify({
