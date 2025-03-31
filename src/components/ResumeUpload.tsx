@@ -9,7 +9,7 @@ import { useResumeUpload } from "@/hooks/use-resume-upload";
 import { fetchCurrentResume, cleanupAllResumes } from "@/lib/resume-utils";
 import { useJobMatching } from '@/hooks/use-job-matching';
 import { Button } from "@/components/ui/button";
-import { Trash2, AlertCircle, FileText } from "lucide-react";
+import { Trash2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -19,6 +19,7 @@ interface ResumeUploadProps {
 }
 
 const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
+  // State declarations
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
@@ -34,13 +35,14 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     is_primary?: boolean;
   } | null>(null);
   
+  // Hooks
   const { user } = useAuth();
   const { isUploading, uploadResume } = useResumeUpload(user, onLoginRequired);
   const { isProcessing, generateJobMatches } = useJobMatching();
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
-  // Check if GEMINI_API_KEY is configured
+  // Effects
   useEffect(() => {
     const checkGeminiConfig = async () => {
       if (user) {
@@ -65,7 +67,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     checkGeminiConfig();
   }, [user]);
 
-  // Load the current resume when the component mounts or when the user changes
+  // Load current resume when user changes
   useEffect(() => {
     if (user) {
       loadCurrentResume();
@@ -151,6 +153,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   }, [isUploading]);
 
+  // Functions
   const loadCurrentResume = async () => {
     if (user) {
       try {
@@ -267,6 +270,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
+  // Render
   return (
     <div className="w-full">
       {isUploading && (
