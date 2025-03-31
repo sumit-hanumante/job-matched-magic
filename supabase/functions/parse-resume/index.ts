@@ -24,7 +24,6 @@ serve(async (req) => {
     console.log(`Raw request body received, length: ${rawBody.length}`);
     console.log(`First 100 chars: ${rawBody.substring(0, 100)}...`);
     
-    // Additional validation for empty body
     if (!rawBody || rawBody.length === 0) {
       console.error("Empty request body received");
       throw new Error("Request body is empty");
@@ -47,10 +46,8 @@ serve(async (req) => {
       
       resumeText = body.resumeText;
       
-      // Handle case where resumeUrl might be sent instead
       if (!resumeText && body.resumeUrl) {
         console.log("No resumeText found but resumeUrl was provided. This is not supported anymore.");
-        console.log("URL provided:", body.resumeUrl);
         throw new Error("Direct text extraction is required. URL-based extraction is no longer supported.");
       }
     } catch (parseError) {
@@ -86,11 +83,46 @@ serve(async (req) => {
     console.log("Initializing Gemini API with provided key");
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     
-    // According to https://ai.google.dev/models/gemini, valid model names include:
-    // - gemini-1.5-pro
-    // - gemini-1.5-flash
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-
+    // Define response schema
+    const resumeSchema = {
+      type: "object",
+      properties: {
+        personal_information: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            email: { type: "string" },
+            phone: { type: "string" },
+            location: { type: "string" }
+          }
+        },
+        summary: { type: "string" },
+        extracted_skills: { type: "array", items: { type: "string" } },
+        experience: { type: "string" },
+        education: { type: "array", items: { type: "string" } },
+        projects: { type: "array", items: { type: "string" } },
+        preferred_locations: { type: "array", items: { type: "string" } },
+        preferred_companies: { type: "array", items: { type: "string" } },
+        min_salary: { type: "number" },
+        max_salary: { type: "number" },
+        preferred_work_type: { type: "string" },
+        years_of_experience: { type: "number" },
+        possible_job_titles: { type: "array", items: { type: "string" } }
+      }
+    };
+    
+    // Use Gemini model for extraction with schema
+    console.log("Setting up extraction model with schema");
+    const extractionModel = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.2,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 2048,
+      }
+    });
+    
     // 4. Build the prompt using the extracted resume text
     const prompt = `
       Analyze the following resume text and extract the candidate's details in a format optimized for job matching.
@@ -110,40 +142,26 @@ serve(async (req) => {
       - years_of_experience (total years of professional experience as a number)
       - possible_job_titles (array of job titles that would be suitable for this candidate based on their skills and experience)
       
-      Format the skills as a clean array of strings, not nested objects, to enable easier matching with job requirements.
+      Format the skills as a clean array of strings, not nested objects.
       Make sure salary values are numeric only (no currency symbols or text).
-      For possible_job_titles, include both current and potential roles they could apply for based on their skills and experience.
       
       Resume text:
       ${resumeText}
     `;
     
     console.log("Sending prompt to Gemini (prompt length) =>", prompt.length);
+    console.log("====== BEFORE GEMINI API CALL ======");
+    console.log("Request timestamp:", new Date().toISOString());
+    console.log("Resume text length:", resumeText.length);
+    console.log("Prompt first 300 chars:", prompt.substring(0, 300) + "...");
+    console.log("Making API call to Gemini...");
     
     try {
-      // 5. Call Gemini
-      console.log("====== BEFORE GEMINI API CALL ======");
-      console.log("Request timestamp:", new Date().toISOString());
-      console.log("Request model:", "gemini-1.5-pro");
-      
-      // Add timeout handling and more detailed error logging
-      const generationConfig = {
-        temperature: 0.2,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 8192,
-      };
-      
-      console.log("Generation config:", JSON.stringify(generationConfig, null, 2));
-      console.log("Resume text length:", resumeText.length);
-      console.log("Prompt first 300 chars:", prompt.substring(0, 300) + "...");
-      
-      console.log("Making API call to Gemini...");
       const startTime = performance.now();
       
-      const result = await model.generateContent({
+      // Make the API call
+      const result = await extractionModel.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig,
       });
       
       const endTime = performance.now();
@@ -169,9 +187,6 @@ serve(async (req) => {
         console.log("Successfully parsed JSON response");
         console.log("Extracted skills count:", parsedData.extracted_skills?.length || 0);
         console.log("Possible job titles:", parsedData.possible_job_titles?.join(', ') || 'none');
-        console.log("Experience summary:", parsedData.experience ? "Present" : "Missing");
-        console.log("Education:", parsedData.education ? "Present" : "Missing");
-        console.log("Projects:", parsedData.projects ? "Present" : "Missing");
       } catch (parseErr) {
         console.error("Failed to parse Gemini response as JSON:", parseErr);
         console.error("Raw Gemini response:", rawGeminiResponse);
