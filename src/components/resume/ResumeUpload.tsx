@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -36,9 +35,10 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     if (!user) return;
 
     try {
+      console.log("Fetching current resume for user:", user.id);
       const { data, error } = await supabase
         .from("resumes")
-        .select("id, file_name, status, created_at, file_path")
+        .select("id, file_name, status, created_at, file_path, extracted_skills")
         .eq("user_id", user.id)
         .order("order_index", { ascending: true })
         .limit(1)
@@ -49,6 +49,8 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         return;
       }
 
+      console.log("Resume fetch result:", data);
+      
       if (data) {
         setCurrentResume({
           id: data.id,
@@ -57,7 +59,14 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           uploaded_at: data.created_at,
           file_path: data.file_path
         });
+        
+        if (data.extracted_skills) {
+          console.log("Resume has extracted skills:", data.extracted_skills.length);
+        } else {
+          console.log("Resume does not have extracted skills");
+        }
       } else {
+        console.log("No resume found for user");
         setCurrentResume(null);
       }
     } catch (error) {
@@ -137,7 +146,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     setUploadStatus("Extracting text from PDF...");
     
     try {
-      // Use PDF.js to extract text
       const { getDocument } = await import('pdfjs-dist');
       const fileReader = new FileReader();
       
@@ -203,11 +211,9 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         return;
       }
 
-      // Shift existing resumes to make room for the new one
       setUploadStatus("Preparing database for new resume...");
       await shiftResumes(user.id);
 
-      // Upload file to storage
       const fileExt = file.name.split(".").pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
@@ -220,17 +226,27 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       if (uploadError) throw uploadError;
       console.log(`File uploaded to: ${filePath}`);
 
-      // Extract text from PDF/DOCX
       let resumeText;
       if (file.type === "application/pdf") {
         resumeText = await extractTextFromPdf(file);
         console.log("Extracted text from PDF, length:", resumeText.length);
       } else {
-        // For now, we'll handle DOCX files later
         resumeText = "Document text extraction not implemented for this file type.";
       }
 
-      // Create initial database entry
+      setUploadStatus("Testing Gemini API key configuration...");
+      const { data: testData, error: testError } = await supabase.functions.invoke("parse-resume", {
+        method: "POST",
+        body: JSON.stringify({ test: true }),
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      if (testError) {
+        console.error("Error testing Gemini configuration:", testError);
+      } else {
+        console.log("Gemini test response:", testData);
+      }
+
       setUploadStatus("Creating database entry...");
       const { error: insertError, data: resumeData } = await supabase
         .from("resumes")
@@ -251,55 +267,75 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         throw insertError;
       }
 
-      // Call Gemini for parsing
       setUploadStatus("Analyzing resume with AI...");
       console.log("Sending text to parse-resume function, length:", resumeText?.length || 0);
 
-      const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
-        method: "POST",
-        body: JSON.stringify({ resumeText: resumeText }),
-        headers: { "Content-Type": "application/json" },
-      });
+      try {
+        const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
+          method: "POST",
+          body: JSON.stringify({ resumeText: resumeText }),
+          headers: { "Content-Type": "application/json" },
+        });
 
-      if (parseError) {
-        throw parseError;
-      }
+        if (parseError) {
+          throw parseError;
+        }
 
-      if (!parseData.success) {
-        throw new Error(parseData.error || "Failed to parse resume");
-      }
+        if (!parseData.success) {
+          throw new Error(parseData.error || "Failed to parse resume");
+        }
 
-      console.log("Parse response data:", parseData.data);
-      setUploadStatus("AI analysis complete, saving results...");
+        console.log("Parse response data:", parseData.data);
+        setUploadStatus("AI analysis complete, saving results...");
 
-      // Update the resume record with parsed data
-      const parsedFields = {
-        status: "parsed",
-        extracted_skills: parseData.data.extracted_skills,
-        summary: parseData.data.summary,
-        experience: parseData.data.experience,
-        education: parseData.data.education,
-        projects: parseData.data.projects,
-        preferred_locations: parseData.data.preferred_locations,
-        preferred_companies: parseData.data.preferred_companies,
-        min_salary: parseData.data.min_salary,
-        max_salary: parseData.data.max_salary,
-        preferred_work_type: parseData.data.preferred_work_type,
-        years_of_experience: parseData.data.years_of_experience,
-        possible_job_titles: parseData.data.possible_job_titles,
-        personal_information: parseData.data.personal_information,
-      };
+        const parsedFields: Record<string, any> = {
+          status: "parsed",
+        };
+        
+        if (parseData.data.extracted_skills) parsedFields.extracted_skills = parseData.data.extracted_skills;
+        if (parseData.data.summary) parsedFields.summary = parseData.data.summary;
+        if (parseData.data.experience) {
+          parsedFields.experience = typeof parseData.data.experience === 'object' ? 
+            JSON.stringify(parseData.data.experience) : parseData.data.experience;
+        }
+        if (parseData.data.education) {
+          parsedFields.education = typeof parseData.data.education === 'object' ? 
+            JSON.stringify(parseData.data.education) : parseData.data.education;
+        }
+        if (parseData.data.projects) {
+          parsedFields.projects = typeof parseData.data.projects === 'object' ? 
+            JSON.stringify(parseData.data.projects) : parseData.data.projects;
+        }
+        if (parseData.data.preferred_locations) parsedFields.preferred_locations = parseData.data.preferred_locations;
+        if (parseData.data.preferred_companies) parsedFields.preferred_companies = parseData.data.preferred_companies;
+        if (parseData.data.min_salary) parsedFields.min_salary = parseData.data.min_salary;
+        if (parseData.data.max_salary) parsedFields.max_salary = parseData.data.max_salary;
+        if (parseData.data.preferred_work_type) parsedFields.preferred_work_type = parseData.data.preferred_work_type;
+        if (parseData.data.years_of_experience) parsedFields.years_of_experience = parseData.data.years_of_experience;
+        if (parseData.data.possible_job_titles) parsedFields.possible_job_titles = parseData.data.possible_job_titles;
+        if (parseData.data.personal_information) {
+          parsedFields.personal_information = typeof parseData.data.personal_information === 'object' ? 
+            JSON.stringify(parseData.data.personal_information) : parseData.data.personal_information;
+        }
 
-      console.log("Updating resume with parsed fields:", parsedFields);
+        console.log("Updating resume with parsed fields:", parsedFields);
 
-      const { error: updateError } = await supabase
-        .from("resumes")
-        .update(parsedFields)
-        .eq("id", resumeData.id);
+        const { error: updateError } = await supabase
+          .from("resumes")
+          .update(parsedFields)
+          .eq("id", resumeData.id);
 
-      if (updateError) {
-        console.error("Error updating resume with parsed data:", updateError);
-        throw updateError;
+        if (updateError) {
+          console.error("Error updating resume with parsed data:", updateError);
+          throw updateError;
+        }
+      } catch (parseError) {
+        console.error("Error parsing resume:", parseError);
+        toast({
+          variant: "warning",
+          title: "Resume uploaded with limited analysis",
+          description: "Your resume was saved, but we couldn't fully analyze it.",
+        });
       }
 
       toast({

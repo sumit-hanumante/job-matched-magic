@@ -21,7 +21,7 @@ serve(async (req) => {
 
     // 1. Read the raw request body
     const rawBody = await req.text();
-    console.log("Raw request body length =>", rawBody.length);
+    console.log(`Raw request body received, length: ${rawBody.length}`);
     
     // Additional validation for empty body
     if (!rawBody || rawBody.length === 0) {
@@ -54,11 +54,12 @@ serve(async (req) => {
       }
     } catch (parseError) {
       console.error("JSON parsing error:", parseError);
-      console.error("Raw body:", rawBody.substring(0, 500) + "..."); // Log first 500 chars for debugging
+      console.error("Raw body preview (first 200 chars):", rawBody.substring(0, 200) + "..."); 
       throw new Error(`Failed to parse request JSON: ${parseError.message}`);
     }
     
     if (!resumeText) {
+      console.error("No resume text provided in the request body");
       throw new Error("No resume text provided in the request body");
     }
     
@@ -66,7 +67,7 @@ serve(async (req) => {
     console.log("First 200 chars of resumeText =>", resumeText.substring(0, 200));
 
     // 3. Initialize Gemini
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || "";
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     console.log("Gemini API Key present:", !!geminiApiKey);
     
     if (!geminiApiKey) {
@@ -76,7 +77,6 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           data: {
-            resume_text: resumeText, // Just return the raw text
             extracted_skills: [],
             years_of_experience: null,
             possible_job_titles: [],
@@ -89,7 +89,8 @@ serve(async (req) => {
             education: [],
             projects: [],
             personal_information: {},
-            summary: ""
+            summary: "",
+            resume_text: resumeText // Just return the raw text
           },
           message: "GEMINI_API_KEY is missing, saving raw text only."
         }),
@@ -97,6 +98,7 @@ serve(async (req) => {
       );
     }
     
+    console.log("Initializing Gemini API with provided key");
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
@@ -129,29 +131,36 @@ serve(async (req) => {
     
     console.log("Sending prompt to Gemini (prompt length) =>", prompt.length);
     
-    // 5. Call Gemini
-    const result = await model.generateContent(prompt);
-    const rawGeminiResponse = await result.response.text();
-    console.log("Gemini raw response received, length =>", rawGeminiResponse.length);
-    console.log("Gemini first 300 chars =>", rawGeminiResponse.substring(0, 300));
-    
-    // 6. Attempt to parse Gemini's response as JSON
-    let parsedData;
     try {
-      // Remove markdown code blocks if present and parse JSON
-      const cleanedResponse = rawGeminiResponse.replace(/```json|```/g, '').trim();
-      console.log("Cleaned response (first 300 chars):", cleanedResponse.substring(0, 300));
-      parsedData = JSON.parse(cleanedResponse);
+      // 5. Call Gemini
+      console.log("Calling Gemini API...");
+      const result = await model.generateContent(prompt);
+      const rawGeminiResponse = await result.response.text();
+      console.log("Gemini raw response received, length =>", rawGeminiResponse.length);
+      console.log("Gemini first 300 chars =>", rawGeminiResponse.substring(0, 300));
       
-      console.log("Successfully parsed JSON response");
-      console.log("Extracted skills count:", parsedData.extracted_skills?.length || 0);
-      console.log("Possible job titles:", parsedData.possible_job_titles?.join(', ') || 'none');
-      console.log("Experience summary:", parsedData.experience ? "Present" : "Missing");
-      console.log("Education:", parsedData.education ? "Present" : "Missing");
-      console.log("Projects:", parsedData.projects ? "Present" : "Missing");
+      // 6. Attempt to parse Gemini's response as JSON
+      let parsedData;
+      try {
+        // Remove markdown code blocks if present and parse JSON
+        const cleanedResponse = rawGeminiResponse.replace(/```json|```/g, '').trim();
+        console.log("Cleaned response (first 300 chars):", cleanedResponse.substring(0, 300));
+        parsedData = JSON.parse(cleanedResponse);
+        
+        console.log("Successfully parsed JSON response");
+        console.log("Extracted skills count:", parsedData.extracted_skills?.length || 0);
+        console.log("Possible job titles:", parsedData.possible_job_titles?.join(', ') || 'none');
+        console.log("Experience summary:", parsedData.experience ? "Present" : "Missing");
+        console.log("Education:", parsedData.education ? "Present" : "Missing");
+        console.log("Projects:", parsedData.projects ? "Present" : "Missing");
+      } catch (parseErr) {
+        console.error("Failed to parse Gemini response as JSON:", parseErr);
+        console.log("Raw Gemini response:", rawGeminiResponse);
+        throw new Error("Failed to parse AI response as valid JSON");
+      }
       
       // Ensure all expected fields are present
-      parsedData = {
+      const formattedData = {
         personal_information: parsedData.personal_information || {},
         summary: parsedData.summary || "",
         extracted_skills: parsedData.extracted_skills || [],
@@ -168,35 +177,24 @@ serve(async (req) => {
         resume_text: resumeText // Always include the full resume text
       };
       
-    } catch (parseErr) {
-      console.error("Failed to parse Gemini response as JSON:", parseErr);
-      console.log("Raw Gemini response:", rawGeminiResponse);
-      // Create a minimal valid structure instead of throwing
-      parsedData = { 
-        extracted_skills: [],
-        preferred_locations: [],
-        preferred_companies: [],
-        personal_information: {},
-        summary: "Failed to parse resume automatically. Raw text saved.",
-        possible_job_titles: [],
-        years_of_experience: null,
-        experience: "",
-        education: [],
-        projects: [],
-        resume_text: resumeText
-      };
+      console.log("Successfully formatted parsed data");
+      console.log("Sending back response with all extracted data");
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: formattedData
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } catch (aiError) {
+      console.error("Error calling Gemini API:", aiError);
+      throw new Error(`AI processing error: ${aiError.message}`);
     }
-    
-    // 7. Return the processed data
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: parsedData
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (error) {
     console.error("Error in parse-resume =>", error);
+    console.error("Error stack:", error.stack);
+    
     // For actual errors, return an error response
     return new Response(
       JSON.stringify({
@@ -207,5 +205,7 @@ serve(async (req) => {
       }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+  } finally {
+    console.log("----- parse-resume function: END -----");
   }
 });
