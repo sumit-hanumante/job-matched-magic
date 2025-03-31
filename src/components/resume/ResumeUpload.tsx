@@ -332,7 +332,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       } catch (parseError) {
         console.error("Error parsing resume:", parseError);
         toast({
-          variant: "warning",
+          variant: "default",
           title: "Resume uploaded with limited analysis",
           description: "Your resume was saved, but we couldn't fully analyze it.",
         });
