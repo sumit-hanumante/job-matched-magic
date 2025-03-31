@@ -210,14 +210,12 @@ export const useResumeUpload = (
       try {
         console.log("Calling edge function with text length:", extractedText.length);
         
-        // Make sure the body is properly formatted JSON
-        const requestBody = JSON.stringify({ resumeText: extractedText });
-        console.log("Request body preview (first 100 chars):", requestBody.substring(0, 100));
+        // Send the request to the edge function as an object (not stringified)
+        console.log("Sending request with body:", { resumeText: extractedText.substring(0, 100) + "..." });
         
         const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
           method: "POST",
-          body: requestBody,
-          headers: { "Content-Type": "application/json" }
+          body: { resumeText: extractedText }
         });
         
         if (parseError) {
@@ -271,9 +269,7 @@ export const useResumeUpload = (
         order_index: number;
         resume_text: string;
         extracted_skills?: string[];
-        experience?: any;
-        education?: any;
-        projects?: any;
+        experience?: string;
         preferred_locations?: string[];
         preferred_companies?: string[];
         min_salary?: number | null;
@@ -281,7 +277,7 @@ export const useResumeUpload = (
         preferred_work_type?: string | null;
         years_of_experience?: number | null;
         possible_job_titles?: string[];
-        personal_information?: any;
+        personal_information?: string;
         summary?: string;
       }
       
@@ -297,7 +293,7 @@ export const useResumeUpload = (
         extracted_skills: [] // Initialize with empty array to ensure field exists
       };
 
-      // Add parsed fields if available
+      // Add parsed fields if available - Only include fields that actually exist in the database
       if (parsedData) {
         console.log("Adding parsed data to resume record");
         
@@ -309,41 +305,22 @@ export const useResumeUpload = (
           resumeData.extracted_skills = [];
         }
         
-        // Handle experience - could be string or object
+        // Handle experience as string (since the column exists)
         if (parsedData.experience) {
           resumeData.experience = typeof parsedData.experience === 'object' 
             ? JSON.stringify(parsedData.experience) 
             : parsedData.experience;
         }
         
-        // Handle education - could be array or object
-        if (parsedData.education) {
-          resumeData.education = typeof parsedData.education === 'object' 
-            ? JSON.stringify(parsedData.education) 
-            : parsedData.education;
-        }
-        
-        // Handle projects - could be array or object
-        if (parsedData.projects) {
-          resumeData.projects = typeof parsedData.projects === 'object' 
-            ? JSON.stringify(parsedData.projects) 
-            : parsedData.projects;
-        }
-        
-        // Handle personal information
-        if (parsedData.personal_information) {
-          resumeData.personal_information = typeof parsedData.personal_information === 'object'
-            ? JSON.stringify(parsedData.personal_information) 
-            : parsedData.personal_information;
-        }
-        
-        // Handle primitive fields
+        // Handle primitive fields - only add the ones that exist in the database schema
         resumeData.preferred_locations = Array.isArray(parsedData.preferred_locations) 
           ? parsedData.preferred_locations 
           : [];
+          
         resumeData.preferred_companies = Array.isArray(parsedData.preferred_companies) 
           ? parsedData.preferred_companies 
           : [];
+          
         resumeData.min_salary = parsedData.min_salary || null;
         resumeData.max_salary = parsedData.max_salary || null;
         resumeData.preferred_work_type = parsedData.preferred_work_type || null;
@@ -351,7 +328,17 @@ export const useResumeUpload = (
         resumeData.possible_job_titles = Array.isArray(parsedData.possible_job_titles) 
           ? parsedData.possible_job_titles 
           : [];
-        resumeData.summary = parsedData.summary || "";
+          
+        // Add personal_information and summary if they exist in the DB schema
+        if (parsedData.personal_information) {
+          resumeData.personal_information = typeof parsedData.personal_information === 'object'
+            ? JSON.stringify(parsedData.personal_information) 
+            : parsedData.personal_information;
+        }
+        
+        if (parsedData.summary) {
+          resumeData.summary = parsedData.summary || "";
+        }
       }
       
       console.log("Resume data to be inserted:", JSON.stringify({

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -21,32 +20,35 @@ serve(async (req) => {
     console.log("Request method:", req.method);
     console.log("Request headers:", JSON.stringify(Object.fromEntries(req.headers.entries()), null, 2));
     
-    // 1. Read and parse request body
-    const rawBody = await req.text();
-    console.log(`Raw request body received, length: ${rawBody.length}`);
-    if (rawBody.length > 0) {
-      console.log(`First 100 chars: ${rawBody.substring(0, 100)}...`);
-    } else {
-      console.log("WARNING: Request body is empty!");
-      console.log("Request URL:", req.url);
-    }
-    
-    if (!rawBody || rawBody.length === 0) {
-      throw new Error("Request body is empty");
-    }
-
-    // Parse JSON expecting 'resumeText'
+    // 1. Parse the request body
     let parsedBody;
     try {
-      parsedBody = JSON.parse(rawBody);
-      console.log("Parsed JSON body keys:", Object.keys(parsedBody));
+      // Parse body directly - should work with both stringified and raw JSON
+      parsedBody = await req.json();
+      console.log("Request body parsed successfully");
+      console.log("Body keys:", Object.keys(parsedBody));
     } catch (parseError) {
-      console.error("Failed to parse JSON body:", parseError);
-      throw new Error("Invalid JSON in request body");
+      console.error("Failed to parse request body as JSON:", parseError);
+      
+      // As a fallback, try to read the raw text and then parse it
+      try {
+        const rawText = await req.text();
+        console.log("Raw body length:", rawText.length);
+        if (rawText.length > 0) {
+          console.log("Raw body preview:", rawText.substring(0, 100) + "...");
+          parsedBody = JSON.parse(rawText);
+          console.log("Parsed JSON from raw text successfully");
+        } else {
+          throw new Error("Empty request body");
+        }
+      } catch (textError) {
+        console.error("Failed to read request body as text:", textError);
+        throw new Error("Invalid or empty request body");
+      }
     }
     
     const { resumeText, test } = parsedBody;
-    console.log(`Request body format => ${test ? ' test' : ' resumeText'}`);
+    console.log(`Request body format => ${test ? 'test' : (resumeText ? 'resumeText' : 'unknown')}`);
     
     // Handle test requests
     if (test === true) {
@@ -90,8 +92,6 @@ serve(async (req) => {
       - summary (brief candidate overview)
       - extracted_skills (array of technical skills, soft skills, tools)
       - experience (work history with company, role, dates, responsibilities)
-      - education (degrees, institutions, dates)
-      - projects (name, description, technologies)
       - preferred_locations (array of locations preferred)
       - preferred_companies (array of company names the candidate has mentioned interest in)
       - min_salary (minimum salary as number without currency symbols)
@@ -127,7 +127,6 @@ serve(async (req) => {
       
       // Log the full request details (URL and payload)
       console.log("Making API request to:", apiUrl);
-      console.log("Request payload:", JSON.stringify(requestPayload));
       console.log("Request payload size:", JSON.stringify(requestPayload).length);
 
       const response = await fetch(apiUrl, {
@@ -192,8 +191,6 @@ serve(async (req) => {
         summary: parsedData.summary || "",
         extracted_skills: Array.isArray(parsedData.extracted_skills) ? parsedData.extracted_skills : [],
         experience: parsedData.experience || "",
-        education: Array.isArray(parsedData.education) ? parsedData.education : [],
-        projects: Array.isArray(parsedData.projects) ? parsedData.projects : [],
         preferred_locations: Array.isArray(parsedData.preferred_locations) ? parsedData.preferred_locations : [],
         preferred_companies: Array.isArray(parsedData.preferred_companies) ? parsedData.preferred_companies : [],
         min_salary: parsedData.min_salary || null,
