@@ -72,12 +72,20 @@ export const useJobMatching = () => {
           job.company
         );
         
-        // Calculate salary match
-        // Use job as the third parameter to match the function signature in calculateMatchers.ts
+        // Calculate salary match - create a properly formatted job object with required properties
         const salaryMatchScore = calculateSalaryMatchScore(
           resume.min_salary,
           resume.max_salary,
           {
+            id: job.id,
+            title: job.title,
+            company: job.company,
+            location: job.location,
+            description: "",  // Adding required properties with default values
+            applyUrl: "",
+            matchScore: 0,
+            postedDate: "",
+            source: "",
             salaryRange: `${job.salary_min || 0}-${job.salary_max || 0}`
           }
         );
