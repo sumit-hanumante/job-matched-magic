@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -88,33 +89,35 @@ serve(async (req) => {
     `;
 
     console.log("Prepared prompt with length:", prompt.length);
-    console.log("API call preparation complete, making request to Gemini API...");
-
+    
     // 4. Direct API call to Gemini using fetch
     try {
       const apiStartTime = Date.now();
       console.log(`Using Gemini API with key starting with: ${geminiApiKey.substring(0, 4)}...`);
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
       
+      // Create the request payload
+      const requestPayload = {
+        contents: [
+          {
+            parts: [
+              { text: prompt }
+            ]
+          }
+        ]
+      };
+      
+      // Log the full request details (URL and payload)
       console.log("Making API request to:", apiUrl);
-      console.log("Request payload size:", JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      }).length);
+      console.log("Request payload:", JSON.stringify(requestPayload));
+      console.log("Request payload size:", JSON.stringify(requestPayload).length);
 
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt }
-              ]
-            }
-          ]
-        })
+        body: JSON.stringify(requestPayload)
       });
       
       console.log(`Gemini API response received in ${Date.now() - apiStartTime}ms`);
