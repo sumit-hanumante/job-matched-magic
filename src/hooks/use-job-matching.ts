@@ -1,7 +1,8 @@
+
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { calculateSkillsMatch, calculateLocationMatch, calculateCompanyMatch, calculateSalaryMatch } from "@/lib/jobMatcher";
+import { calculateSkillMatchScore, calculateLocationMatchScore, calculateCompanyMatchScore, calculateSalaryMatchScore } from "@/lib/jobMatcher";
 
 // Add this function to handle job matching with better error handling for duplicates
 export const useJobMatching = () => {
@@ -57,22 +58,22 @@ export const useJobMatching = () => {
       // Calculate match scores for each job
       const jobMatches = jobs.map(job => {
         // Calculate skill match
-        const skillMatchScore = calculateSkillsMatch(resume.extracted_skills, job.requirements || []);
+        const skillMatchScore = calculateSkillMatchScore(resume.extracted_skills, job.requirements || []);
         
         // Calculate location match
-        const locationMatchScore = calculateLocationMatch(
+        const locationMatchScore = calculateLocationMatchScore(
           resume.preferred_locations || [],
           job.location
         );
         
         // Calculate company match
-        const companyMatchScore = calculateCompanyMatch(
+        const companyMatchScore = calculateCompanyMatchScore(
           resume.preferred_companies || [],
           job.company
         );
         
         // Calculate salary match
-        const salaryMatchScore = calculateSalaryMatch(
+        const salaryMatchScore = calculateSalaryMatchScore(
           resume.min_salary,
           resume.max_salary,
           job.salary_min,
@@ -115,24 +116,29 @@ export const useJobMatching = () => {
       
       // For each match, try to insert or update if it already exists
       for (const match of topMatches) {
-        const { error: insertError } = await supabase
-          .from("job_matches")
-          .upsert({
-            user_id: await supabase.auth.getUser().then(data => data.data.user?.id),
-            job_id: match.job_id,
-            match_score: match.match_score,
-            skill_match_score: match.skill_match_score,
-            location_match_score: match.location_match_score,
-            company_match_score: match.company_match_score,
-            salary_match_score: match.salary_match_score,
-            is_shown: false
-          }, {
-            onConflict: 'user_id,job_id',
-            ignoreDuplicates: false
-          });
-        
-        if (insertError && insertError.code !== '23505') { // Ignore duplicate key error
-          console.error("Error saving job match:", insertError);
+        try {
+          const { error: insertError } = await supabase
+            .from("job_matches")
+            .upsert({
+              user_id: await supabase.auth.getUser().then(data => data.data.user?.id),
+              job_id: match.job_id,
+              match_score: match.match_score,
+              skill_match_score: match.skill_match_score,
+              location_match_score: match.location_match_score,
+              company_match_score: match.company_match_score,
+              salary_match_score: match.salary_match_score,
+              is_shown: false
+            }, {
+              onConflict: 'user_id,job_id',
+              ignoreDuplicates: false
+            });
+          
+          if (insertError && insertError.code !== '23505') { // Ignore duplicate key error
+            console.error("Error saving job match:", insertError);
+          }
+        } catch (matchError) {
+          // Log the error but continue with the next match
+          console.error("Error processing job match:", matchError);
         }
       }
       
