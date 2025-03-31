@@ -39,6 +39,31 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
+  // Check if GEMINI_API_KEY is configured
+  useEffect(() => {
+    const checkGeminiConfig = async () => {
+      if (user) {
+        try {
+          const { data, error } = await supabase.functions.invoke("parse-resume", {
+            method: "POST",
+            body: JSON.stringify({ test: true }),
+            headers: { "Content-Type": "application/json" },
+          });
+          
+          if (error) {
+            console.error("Error testing Gemini configuration:", error);
+          } else {
+            console.log("Gemini configuration test response:", data);
+          }
+        } catch (err) {
+          console.error("Failed to test Gemini configuration:", err);
+        }
+      }
+    };
+    
+    checkGeminiConfig();
+  }, [user]);
+
   // Load the current resume when the component mounts or when the user changes
   useEffect(() => {
     if (user) {
