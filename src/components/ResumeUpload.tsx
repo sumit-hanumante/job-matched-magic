@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { supabase } from "@/lib/supabase";
 import ResumeDisplay from "./resume/ResumeDisplay";
 import ResumeDropzone from "./resume/ResumeDropzone";
 import ResumeUploadForm from "./resume/ResumeUploadForm";
