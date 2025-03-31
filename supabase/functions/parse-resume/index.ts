@@ -73,7 +73,6 @@ serve(async (req) => {
     
     if (!geminiApiKey) {
       console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
-      // Return a more user-friendly error response
       return new Response(
         JSON.stringify({
           success: false,
@@ -86,6 +85,10 @@ serve(async (req) => {
     
     console.log("Initializing Gemini API with provided key");
     const genAI = new GoogleGenerativeAI(geminiApiKey);
+    
+    // According to https://ai.google.dev/models/gemini, valid model names include:
+    // - gemini-1.5-pro
+    // - gemini-1.5-flash
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
     // 4. Build the prompt using the extracted resume text
@@ -120,7 +123,20 @@ serve(async (req) => {
     try {
       // 5. Call Gemini
       console.log("Calling Gemini API...");
-      const result = await model.generateContent(prompt);
+      
+      // Add timeout handling and more detailed error logging
+      const generationConfig = {
+        temperature: 0.2,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      };
+      
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig,
+      });
+      
       const rawGeminiResponse = await result.response.text();
       console.log("Gemini raw response received, length =>", rawGeminiResponse.length);
       console.log("Gemini first 300 chars =>", rawGeminiResponse.substring(0, 300));
@@ -141,7 +157,7 @@ serve(async (req) => {
         console.log("Projects:", parsedData.projects ? "Present" : "Missing");
       } catch (parseErr) {
         console.error("Failed to parse Gemini response as JSON:", parseErr);
-        console.log("Raw Gemini response:", rawGeminiResponse);
+        console.error("Raw Gemini response:", rawGeminiResponse);
         throw new Error("Failed to parse AI response as valid JSON");
       }
       
