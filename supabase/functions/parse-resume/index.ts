@@ -122,7 +122,9 @@ serve(async (req) => {
     
     try {
       // 5. Call Gemini
-      console.log("Calling Gemini API...");
+      console.log("====== BEFORE GEMINI API CALL ======");
+      console.log("Request timestamp:", new Date().toISOString());
+      console.log("Request model:", "gemini-1.5-pro");
       
       // Add timeout handling and more detailed error logging
       const generationConfig = {
@@ -132,14 +134,29 @@ serve(async (req) => {
         maxOutputTokens: 8192,
       };
       
+      console.log("Generation config:", JSON.stringify(generationConfig, null, 2));
+      console.log("Resume text length:", resumeText.length);
+      console.log("Prompt first 300 chars:", prompt.substring(0, 300) + "...");
+      
+      console.log("Making API call to Gemini...");
+      const startTime = performance.now();
+      
       const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig,
       });
       
+      const endTime = performance.now();
+      const apiCallDuration = endTime - startTime;
+      
+      console.log("====== AFTER GEMINI API CALL ======");
+      console.log(`API call completed in ${apiCallDuration.toFixed(2)}ms`);
+      
       const rawGeminiResponse = await result.response.text();
-      console.log("Gemini raw response received, length =>", rawGeminiResponse.length);
-      console.log("Gemini first 300 chars =>", rawGeminiResponse.substring(0, 300));
+      console.log("Gemini response received");
+      console.log("Response timestamp:", new Date().toISOString());
+      console.log("Response length =>", rawGeminiResponse.length);
+      console.log("Response first 300 chars =>", rawGeminiResponse.substring(0, 300));
       
       // 6. Attempt to parse Gemini's response as JSON
       let parsedData;
@@ -180,6 +197,7 @@ serve(async (req) => {
       };
       
       console.log("Successfully formatted parsed data");
+      console.log("Final response structure:", Object.keys(formattedData).join(', '));
       console.log("Sending back response with all extracted data");
       
       return new Response(
