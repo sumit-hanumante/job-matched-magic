@@ -6,7 +6,6 @@ import { shiftResumes } from "@/lib/resume-utils";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Dynamically determine the proper worker URL based on the PDF.js version
-// This approach prevents version mismatches between the API and worker
 const pdfVersion = pdfjsLib.version || "2.16.105";
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
 
@@ -282,6 +281,7 @@ export const useResumeUpload = (
       }
       
       // Define the base resume data object with all required fields
+      // Only include columns that exist in the database schema
       const resumeData: ResumeData = {
         user_id: user.id,
         file_name: file.name,
@@ -293,7 +293,7 @@ export const useResumeUpload = (
         extracted_skills: [] // Initialize with empty array to ensure field exists
       };
 
-      // Add parsed fields if available - Only include fields that actually exist in the database
+      // Add parsed fields if available - Only include fields that actually exist in the database schema
       if (parsedData) {
         console.log("Adding parsed data to resume record");
         
@@ -313,23 +313,24 @@ export const useResumeUpload = (
         }
         
         // Handle primitive fields - only add the ones that exist in the database schema
-        resumeData.preferred_locations = Array.isArray(parsedData.preferred_locations) 
-          ? parsedData.preferred_locations 
-          : [];
+        if (Array.isArray(parsedData.preferred_locations)) {
+          resumeData.preferred_locations = parsedData.preferred_locations;
+        }
           
-        resumeData.preferred_companies = Array.isArray(parsedData.preferred_companies) 
-          ? parsedData.preferred_companies 
-          : [];
+        if (Array.isArray(parsedData.preferred_companies)) {
+          resumeData.preferred_companies = parsedData.preferred_companies;
+        }
           
         resumeData.min_salary = parsedData.min_salary || null;
         resumeData.max_salary = parsedData.max_salary || null;
         resumeData.preferred_work_type = parsedData.preferred_work_type || null;
         resumeData.years_of_experience = parsedData.years_of_experience || null;
-        resumeData.possible_job_titles = Array.isArray(parsedData.possible_job_titles) 
-          ? parsedData.possible_job_titles 
-          : [];
+        
+        if (Array.isArray(parsedData.possible_job_titles)) {
+          resumeData.possible_job_titles = parsedData.possible_job_titles;
+        }
           
-        // Add personal_information and summary if they exist in the DB schema
+        // Add personal_information and summary if they are present in the parsed data
         if (parsedData.personal_information) {
           resumeData.personal_information = typeof parsedData.personal_information === 'object'
             ? JSON.stringify(parsedData.personal_information) 

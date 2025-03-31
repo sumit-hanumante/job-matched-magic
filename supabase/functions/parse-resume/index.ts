@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -23,28 +24,33 @@ serve(async (req) => {
     // 1. Parse the request body
     let parsedBody;
     try {
-      // Parse body directly - should work with both stringified and raw JSON
-      parsedBody = await req.json();
-      console.log("Request body parsed successfully");
-      console.log("Body keys:", Object.keys(parsedBody));
-    } catch (parseError) {
-      console.error("Failed to parse request body as JSON:", parseError);
-      
-      // As a fallback, try to read the raw text and then parse it
+      // Parse body as JSON - try different ways based on how it was sent
       try {
+        // First try parsing directly - works if body was sent as object
+        parsedBody = await req.json();
+        console.log("Request body parsed successfully as direct JSON");
+      } catch (directParseError) {
+        // If direct parsing failed, read as text and then parse
         const rawText = await req.text();
         console.log("Raw body length:", rawText.length);
-        if (rawText.length > 0) {
-          console.log("Raw body preview:", rawText.substring(0, 100) + "...");
+        
+        if (rawText.length === 0) {
+          throw new Error("Request body is empty");
+        }
+        
+        try {
           parsedBody = JSON.parse(rawText);
           console.log("Parsed JSON from raw text successfully");
-        } else {
-          throw new Error("Empty request body");
+        } catch (textParseError) {
+          console.error("Failed to parse raw text as JSON:", textParseError);
+          throw new Error("Invalid JSON in request body");
         }
-      } catch (textError) {
-        console.error("Failed to read request body as text:", textError);
-        throw new Error("Invalid or empty request body");
       }
+      
+      console.log("Body keys:", Object.keys(parsedBody));
+    } catch (parseError) {
+      console.error("Failed to parse request body:", parseError);
+      throw new Error("Invalid or empty request body");
     }
     
     const { resumeText, test } = parsedBody;
@@ -186,6 +192,7 @@ serve(async (req) => {
       }
       
       // 6. Format the data with defaults if fields are missing
+      // Only include fields that exist in the database schema
       const formattedData = {
         personal_information: parsedData.personal_information || {},
         summary: parsedData.summary || "",
