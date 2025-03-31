@@ -209,7 +209,7 @@ export const useResumeUpload = (
       try {
         console.log("Calling edge function with text length:", extractedText.length);
         
-        // Send the request to the edge function as an object (not stringified)
+        // Send the request to the edge function with the resumeText directly as object
         console.log("Sending request with body:", { resumeText: extractedText.substring(0, 100) + "..." });
         
         const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
@@ -258,61 +258,34 @@ export const useResumeUpload = (
       // 6. Insert the resume record into the database
       console.log("Step 6: Inserting resume record into database...");
       
-      // Define the base resume data interface to ensure type safety
-      interface ResumeData {
-        user_id: string;
-        file_name: string;
-        file_path: string;
-        content_type: string;
-        status: string;
-        order_index: number;
-        resume_text: string;
-        extracted_skills?: string[];
-        experience?: string;
-        preferred_locations?: string[];
-        preferred_companies?: string[];
-        min_salary?: number | null;
-        max_salary?: number | null;
-        preferred_work_type?: string | null;
-        years_of_experience?: number | null;
-        possible_job_titles?: string[];
-        personal_information?: string;
-        summary?: string;
-      }
-      
-      // Define the base resume data object with all required fields
-      // Only include columns that exist in the database schema
-      const resumeData: ResumeData = {
+      // Define the base resume data object with required fields
+      const resumeData: Record<string, any> = {
         user_id: user.id,
         file_name: file.name,
         file_path: filePath,
         content_type: file.type,
         status: parsedData ? "processed" : "uploaded",
         order_index: 1,
-        resume_text: extractedText, // Store the full extracted text
-        extracted_skills: [] // Initialize with empty array to ensure field exists
+        resume_text: extractedText,
       };
 
-      // Add parsed fields if available - Only include fields that actually exist in the database schema
+      // Add parsed fields if available - Only if they exist in the database schema
       if (parsedData) {
         console.log("Adding parsed data to resume record");
         
         // Handle skills
         if (Array.isArray(parsedData.extracted_skills)) {
           resumeData.extracted_skills = parsedData.extracted_skills;
-        } else {
-          console.warn("Extracted skills is not an array, using empty array instead");
-          resumeData.extracted_skills = [];
         }
         
-        // Handle experience as string (since the column exists)
+        // Handle experience as string (only if the column exists)
         if (parsedData.experience) {
           resumeData.experience = typeof parsedData.experience === 'object' 
             ? JSON.stringify(parsedData.experience) 
             : parsedData.experience;
         }
         
-        // Handle primitive fields - only add the ones that exist in the database schema
+        // Add other fields that we know exist in the schema
         if (Array.isArray(parsedData.preferred_locations)) {
           resumeData.preferred_locations = parsedData.preferred_locations;
         }
@@ -324,13 +297,12 @@ export const useResumeUpload = (
         resumeData.min_salary = parsedData.min_salary || null;
         resumeData.max_salary = parsedData.max_salary || null;
         resumeData.preferred_work_type = parsedData.preferred_work_type || null;
-        resumeData.years_of_experience = parsedData.years_of_experience || null;
         
         if (Array.isArray(parsedData.possible_job_titles)) {
           resumeData.possible_job_titles = parsedData.possible_job_titles;
         }
           
-        // Add personal_information and summary if they are present in the parsed data
+        // Add personal_information and summary if they exist in the schema
         if (parsedData.personal_information) {
           resumeData.personal_information = typeof parsedData.personal_information === 'object'
             ? JSON.stringify(parsedData.personal_information) 
@@ -338,14 +310,13 @@ export const useResumeUpload = (
         }
         
         if (parsedData.summary) {
-          resumeData.summary = parsedData.summary || "";
+          resumeData.summary = parsedData.summary;
         }
       }
       
       console.log("Resume data to be inserted:", JSON.stringify({
         ...resumeData,
-        resume_text: `${resumeData.resume_text.substring(0, 100)}... (truncated)`,
-        extracted_skills: resumeData.extracted_skills
+        resume_text: `${resumeData.resume_text.substring(0, 100)}... (truncated)`
       }, null, 2));
 
       const { error: insertError, data: insertedResume } = await supabase
