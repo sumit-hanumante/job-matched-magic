@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -74,7 +73,6 @@ serve(async (req) => {
       Analyze this resume and extract details in JSON format optimized for job matching:
       
       Return a JSON with these keys:
-      - personal_information (name, email, phone, location)
       - summary (brief candidate overview)
       - extracted_skills (array of technical skills, soft skills, tools)
       - experience (work history with company, role, dates, responsibilities)
@@ -172,10 +170,9 @@ serve(async (req) => {
       }
       
       // 6. Format the data with defaults if fields are missing
-      // Only include fields that exist in the database schema
-      // NOTE: We've removed 'education' and 'projects' fields as they're not in the database schema
+      // IMPORTANT: Only include fields that exist in the database schema
+      // Based on Supabase database schema for the 'resumes' table
       const formattedData = {
-        personal_information: parsedData.personal_information || {},
         summary: parsedData.summary || "",
         extracted_skills: Array.isArray(parsedData.extracted_skills) ? parsedData.extracted_skills : [],
         experience: parsedData.experience || "",

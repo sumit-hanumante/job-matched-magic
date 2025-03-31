@@ -301,19 +301,10 @@ export const useResumeUpload = (
           resumeData.possible_job_titles = parsedData.possible_job_titles;
         }
           
-        // Add personal_information and summary if they exist in the schema
-        if (parsedData.personal_information) {
-          resumeData.personal_information = typeof parsedData.personal_information === 'object'
-            ? JSON.stringify(parsedData.personal_information) 
-            : parsedData.personal_information;
-        }
-        
+        // Add summary if it exists in the schema
         if (parsedData.summary) {
           resumeData.summary = parsedData.summary;
         }
-
-        // IMPORTANT: We're removing education and projects fields as they don't exist in the database schema
-        // This prevents the "Could not find the 'education' column of 'resumes'" error
       }
       
       console.log("Resume data to be inserted:", JSON.stringify({
