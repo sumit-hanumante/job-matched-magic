@@ -2,11 +2,10 @@
 // Add console.log at the top of this file to see when it's loaded
 console.log("Loading calculateMatchers.ts module");
 
-import { Job, Resume } from "@/lib/types";
+import { type Job, type Resume } from "@/lib/types";
 
-// Log the type definitions to help debug
-console.log("Job type definition:", typeof Job);
-console.log("Resume type definition:", typeof Resume);
+// Remove the type logging that was causing issues
+console.log("Starting skill match calculation functions");
 
 /**
  * Calculate skill match score between resume skills and job description/requirements
@@ -90,15 +89,15 @@ export function calculateCompanyMatchScore(
  * Calculate salary match score
  * @returns A number between 0-1
  */
-// Add logging to the function signature to see how it's defined
-console.log("Defining calculateSalaryMatchScore function with signature:");
-console.log("calculateSalaryMatchScore(minSalary?: number, maxSalary?: number, job?: Job): number");
 export function calculateSalaryMatchScore(
   minSalary?: number, 
   maxSalary?: number, 
-  job?: Job
+  job?: {
+    salaryRange?: string;
+    [key: string]: any;
+  }
 ): number {
-  console.log("calculateSalaryMatchScore called with:", { minSalary, maxSalary, job });
+  console.log("calculateSalaryMatchScore called with:", { minSalary, maxSalary, jobSalaryRange: job?.salaryRange });
   if (!minSalary || !job?.salaryRange) return 0.5; // Neutral score if no salary info
   
   // Try to extract numbers from salary range string
@@ -143,7 +142,12 @@ export function calculateSalaryMatchScore(
  * @param job The job to match against
  * @returns A number between 0-100 representing the match percentage
  */
-export function calculateMatchScore(resume: Resume, job: Job): number {
+export function calculateMatchScore(
+  resume: Resume, 
+  job: Job
+): number {
+  console.log("calculateMatchScore called with resume and job objects");
+  
   // Default weights for different matching aspects
   const weights = {
     skills: 0.5,      // 50% weight to skills match
