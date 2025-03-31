@@ -257,7 +257,29 @@ export const useResumeUpload = (
       // 6. Insert the resume record into the database
       console.log("Step 6: Inserting resume record into database...");
       
-      const resumeData = {
+      // Define the base resume data object with all required fields
+      const resumeData: {
+        user_id: string;
+        file_name: string;
+        file_path: string;
+        content_type: string;
+        status: string;
+        order_index: number;
+        resume_text: string;
+        extracted_skills?: string[];
+        experience?: string;
+        education?: string;
+        projects?: string;
+        preferred_locations?: string[];
+        preferred_companies?: string[];
+        min_salary?: number | null;
+        max_salary?: number | null;
+        preferred_work_type?: string | null;
+        years_of_experience?: number | null;
+        possible_job_titles?: string[];
+        personal_information?: string;
+        summary?: string;
+      } = {
         user_id: user.id,
         file_name: file.name,
         file_path: filePath,
