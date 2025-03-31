@@ -210,21 +210,14 @@ export const useResumeUpload = (
       try {
         console.log("Calling edge function with text length:", extractedText.length);
         
-        // IMPORTANT: Pass the body directly as an object
-        // OLD APPROACH (problematic):
-        // const requestBody = JSON.stringify({ resumeText: extractedText });
-        // console.log("Request body preview (first 100 chars):", requestBody.substring(0, 100));
-        // const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
-        //   method: "POST",
-        //   body: requestBody, // This was wrong - sending a string instead of an object
-        //   headers: { "Content-Type": "application/json" }
-        // });
+        // Make sure the body is properly formatted JSON
+        const requestBody = JSON.stringify({ resumeText: extractedText });
+        console.log("Request body preview (first 100 chars):", requestBody.substring(0, 100));
         
-        // NEW APPROACH:
-        console.log("Sending request with body:", { resumeText: extractedText.substring(0, 100) + "..." });
         const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
           method: "POST",
-          body: { resumeText: extractedText }, // Pass as object, not string
+          body: requestBody,
+          headers: { "Content-Type": "application/json" }
         });
         
         if (parseError) {
