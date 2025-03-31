@@ -27,12 +27,24 @@ export const useJobMatching = () => {
       return true;
     } catch (error) {
       console.error('Error in job matching process:', error);
-      toast({
-        title: 'Job matching failed',
-        description: error instanceof Error ? error.message : 'An error occurred while matching jobs',
-        variant: 'destructive'
-      });
-      return false;
+      
+      // Display a more specific error message for database constraint violations
+      if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
+        toast({
+          title: 'Job matches already exist',
+          description: 'Some job matches were not created because they already exist',
+          variant: 'default'
+        });
+        // Return true since this is not a critical error
+        return true;
+      } else {
+        toast({
+          title: 'Job matching failed',
+          description: error instanceof Error ? error.message : 'An error occurred while matching jobs',
+          variant: 'destructive'
+        });
+        return false;
+      }
     } finally {
       setIsProcessing(false);
     }

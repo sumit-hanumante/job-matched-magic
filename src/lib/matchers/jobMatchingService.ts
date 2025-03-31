@@ -68,9 +68,41 @@ export async function saveJobMatches(matches: JobMatch[]): Promise<void> {
   try {
     if (!matches || matches.length === 0) return;
     
+    // First fetch existing job matches for this user to avoid duplicates
+    const userIds = [...new Set(matches.map(match => match.userId))];
+    const jobIds = [...new Set(matches.map(match => match.jobId))];
+    
+    if (userIds.length === 0 || jobIds.length === 0) return;
+    
+    const { data: existingMatches } = await supabase
+      .from('job_matches')
+      .select('job_id, user_id')
+      .in('user_id', userIds)
+      .in('job_id', jobIds);
+    
+    // Create a lookup set for quick checking
+    const existingPairs = new Set();
+    if (existingMatches && existingMatches.length > 0) {
+      existingMatches.forEach(match => {
+        existingPairs.add(`${match.user_id}_${match.job_id}`);
+      });
+    }
+    
+    // Filter out matches that already exist
+    const newMatches = matches.filter(match => 
+      !existingPairs.has(`${match.userId}_${match.jobId}`)
+    );
+    
+    console.log(`Found ${existingMatches?.length || 0} existing matches, inserting ${newMatches.length} new matches`);
+    
+    if (newMatches.length === 0) {
+      console.log('No new matches to insert');
+      return;
+    }
+    
     const { error } = await supabase
       .from('job_matches')
-      .insert(matches.map(match => ({
+      .insert(newMatches.map(match => ({
         id: match.id,
         user_id: match.userId,
         job_id: match.jobId,
@@ -83,7 +115,10 @@ export async function saveJobMatches(matches: JobMatch[]): Promise<void> {
         created_at: match.createdAt
       })));
     
-    if (error) throw error;
+    if (error) {
+      console.error('Error details:', error);
+      throw error;
+    }
   } catch (error) {
     console.error('Error saving job matches:', error);
     throw error;

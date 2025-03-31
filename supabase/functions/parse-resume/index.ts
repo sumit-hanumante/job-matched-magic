@@ -22,6 +22,7 @@ serve(async (req) => {
     // 1. Read the raw request body
     const rawBody = await req.text();
     console.log(`Raw request body received, length: ${rawBody.length}`);
+    console.log(`First 100 chars: ${rawBody.substring(0, 100)}...`);
     
     // Additional validation for empty body
     if (!rawBody || rawBody.length === 0) {
@@ -72,35 +73,12 @@ serve(async (req) => {
     
     if (!geminiApiKey) {
       console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
-      // Instead of throwing, return a less processed response
-      return new Response(
-        JSON.stringify({
-          success: true,
-          data: {
-            extracted_skills: [],
-            years_of_experience: null,
-            possible_job_titles: [],
-            preferred_locations: [],
-            preferred_companies: [],
-            min_salary: null,
-            max_salary: null,
-            preferred_work_type: null,
-            experience: "",
-            education: [],
-            projects: [],
-            personal_information: {},
-            summary: "",
-            resume_text: resumeText // Just return the raw text
-          },
-          message: "GEMINI_API_KEY is missing, saving raw text only."
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw new Error("GEMINI_API_KEY environment variable is not set. Please configure the secret in Supabase.");
     }
     
     console.log("Initializing Gemini API with provided key");
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     // 4. Build the prompt using the extracted resume text
     const prompt = `
