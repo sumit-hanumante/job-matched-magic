@@ -17,11 +17,18 @@ serve(async (req) => {
   const startTime = Date.now();
 
   try {
+    // Debug request information
+    console.log("Request method:", req.method);
+    console.log("Request headers:", JSON.stringify(Object.fromEntries(req.headers.entries()), null, 2));
+    
     // 1. Read and parse request body
     const rawBody = await req.text();
     console.log(`Raw request body received, length: ${rawBody.length}`);
     if (rawBody.length > 0) {
       console.log(`First 100 chars: ${rawBody.substring(0, 100)}...`);
+    } else {
+      console.log("WARNING: Request body is empty!");
+      console.log("Request URL:", req.url);
     }
     
     if (!rawBody || rawBody.length === 0) {
@@ -29,7 +36,16 @@ serve(async (req) => {
     }
 
     // Parse JSON expecting 'resumeText'
-    let { resumeText, test } = JSON.parse(rawBody);
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(rawBody);
+      console.log("Parsed JSON body keys:", Object.keys(parsedBody));
+    } catch (parseError) {
+      console.error("Failed to parse JSON body:", parseError);
+      throw new Error("Invalid JSON in request body");
+    }
+    
+    const { resumeText, test } = parsedBody;
     console.log(`Request body format => ${test ? ' test' : ' resumeText'}`);
     
     // Handle test requests
@@ -42,10 +58,12 @@ serve(async (req) => {
     }
     
     if (!resumeText) {
+      console.error("No resumeText provided in request body. Keys found:", Object.keys(parsedBody));
       throw new Error("No resume text provided in the request body");
     }
     
     console.log(`Parsed resumeText length: ${resumeText.length}`);
+    console.log(`resumeText preview: ${resumeText.substring(0, 100)}...`);
     
     // 2. Get the API key and validate it
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
