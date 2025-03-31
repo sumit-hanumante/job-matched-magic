@@ -240,6 +240,8 @@ export const useResumeUpload = (
           parsedData = responseData.data;
           console.log("Extracted skills from API:", parsedData.extracted_skills?.length || 0);
           console.log("First few skills:", parsedData.extracted_skills?.slice(0, 5));
+          console.log("Experience data:", typeof parsedData.experience);
+          console.log("Education data:", typeof parsedData.education);
         } else {
           console.warn("No data returned from parse function");
         }
@@ -270,13 +272,18 @@ export const useResumeUpload = (
         Object.assign(resumeData, {
           extracted_skills: parsedData.extracted_skills || [],
           experience: parsedData.experience || "",
+          education: typeof parsedData.education === 'object' ? JSON.stringify(parsedData.education) : parsedData.education || "",
+          projects: typeof parsedData.projects === 'object' ? JSON.stringify(parsedData.projects) : parsedData.projects || "",
           preferred_locations: parsedData.preferred_locations || [],
           preferred_companies: parsedData.preferred_companies || [],
           min_salary: parsedData.min_salary || null,
           max_salary: parsedData.max_salary || null,
           preferred_work_type: parsedData.preferred_work_type || null,
           years_of_experience: parsedData.years_of_experience || null,
-          possible_job_titles: parsedData.possible_job_titles || []
+          possible_job_titles: parsedData.possible_job_titles || [],
+          personal_information: typeof parsedData.personal_information === 'object' ? 
+            JSON.stringify(parsedData.personal_information) : parsedData.personal_information || "",
+          summary: parsedData.summary || ""
         });
       }
       

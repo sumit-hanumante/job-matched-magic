@@ -19,6 +19,10 @@ export interface Resume {
   userId: string;
   skills: string[];
   experience: string;
+  education?: string;
+  projects?: string;
+  personal_information?: string;
+  summary?: string;
   salary?: string;
   preferred_locations?: string[];
   preferred_companies?: string[];

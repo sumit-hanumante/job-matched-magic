@@ -84,7 +84,12 @@ serve(async (req) => {
             preferred_companies: [],
             min_salary: null,
             max_salary: null,
-            preferred_work_type: null
+            preferred_work_type: null,
+            experience: "",
+            education: [],
+            projects: [],
+            personal_information: {},
+            summary: ""
           },
           message: "GEMINI_API_KEY is missing, saving raw text only."
         }),
@@ -138,6 +143,34 @@ serve(async (req) => {
       console.log("Successfully parsed JSON response");
       console.log("Extracted skills count:", parsedData.extracted_skills?.length || 0);
       console.log("Possible job titles:", parsedData.possible_job_titles?.join(', ') || 'none');
+      console.log("Experience summary:", parsedData.experience ? "Present" : "Missing");
+      console.log("Education:", parsedData.education ? "Present" : "Missing");
+      console.log("Projects:", parsedData.projects ? "Present" : "Missing");
+      
+      // Convert experience to string if it's an object/array
+      if (typeof parsedData.experience === 'object' && parsedData.experience !== null) {
+        parsedData.experience = JSON.stringify(parsedData.experience);
+        console.log("Converted experience object to string");
+      }
+      
+      // Ensure all expected fields are present
+      parsedData = {
+        personal_information: parsedData.personal_information || {},
+        summary: parsedData.summary || "",
+        extracted_skills: parsedData.extracted_skills || [],
+        experience: parsedData.experience || "",
+        education: parsedData.education || [],
+        projects: parsedData.projects || [],
+        preferred_locations: parsedData.preferred_locations || [],
+        preferred_companies: parsedData.preferred_companies || [],
+        min_salary: parsedData.min_salary || null,
+        max_salary: parsedData.max_salary || null,
+        preferred_work_type: parsedData.preferred_work_type || null,
+        years_of_experience: parsedData.years_of_experience || null,
+        possible_job_titles: parsedData.possible_job_titles || [],
+        ...parsedData // Include any other fields Gemini might have returned
+      };
+      
     } catch (parseErr) {
       console.error("Failed to parse Gemini response as JSON:", parseErr);
       console.log("Raw Gemini response:", rawGeminiResponse);
@@ -149,7 +182,10 @@ serve(async (req) => {
         personal_information: {},
         summary: "Failed to parse resume automatically. Raw text saved.",
         possible_job_titles: [],
-        years_of_experience: null
+        years_of_experience: null,
+        experience: "",
+        education: [],
+        projects: []
       };
     }
     
