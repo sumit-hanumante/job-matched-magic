@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -68,14 +69,17 @@ serve(async (req) => {
     
     console.log("GEMINI_API_KEY found with length:", geminiApiKey.length);
     
-    // 3. Build the prompt for resume parsing - 20% shorter but keeping all essential parts
+    // 3. Build the prompt for resume parsing - aligned with our database schema
     const prompt = `
       Analyze this resume and extract details in JSON format optimized for job matching:
       
       Return a JSON with these keys:
+      - personal_information (name, email, phone, location)
       - summary (brief candidate overview)
       - extracted_skills (array of technical skills, soft skills, tools)
       - experience (work history with company, role, dates, responsibilities)
+      - education (degrees, institutions, dates)
+      - projects (name, description, tech stack used)
       - preferred_locations (array of locations preferred)
       - preferred_companies (array of company names the candidate has mentioned interest in)
       - min_salary (minimum salary as number without currency symbols)
@@ -170,12 +174,13 @@ serve(async (req) => {
       }
       
       // 6. Format the data with defaults if fields are missing
-      // IMPORTANT: Only include fields that exist in the database schema
-      // Based on Supabase database schema for the 'resumes' table
+      // Based on our updated Supabase database schema for the 'resumes' table
       const formattedData = {
         summary: parsedData.summary || "",
         extracted_skills: Array.isArray(parsedData.extracted_skills) ? parsedData.extracted_skills : [],
         experience: parsedData.experience || "",
+        education: parsedData.education || "",
+        projects: parsedData.projects || "",
         preferred_locations: Array.isArray(parsedData.preferred_locations) ? parsedData.preferred_locations : [],
         preferred_companies: Array.isArray(parsedData.preferred_companies) ? parsedData.preferred_companies : [],
         min_salary: parsedData.min_salary || null,
@@ -183,6 +188,7 @@ serve(async (req) => {
         preferred_work_type: parsedData.preferred_work_type || null,
         years_of_experience: parsedData.years_of_experience || null,
         possible_job_titles: Array.isArray(parsedData.possible_job_titles) ? parsedData.possible_job_titles : [],
+        personal_information: parsedData.personal_information || {},
         resume_text: resumeText
       };
       

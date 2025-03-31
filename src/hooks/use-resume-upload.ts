@@ -277,31 +277,58 @@ export const useResumeUpload = (
           resumeData.extracted_skills = parsedData.extracted_skills;
         }
         
-        // Handle experience as string (only if the column exists)
+        // Handle experience
         if (parsedData.experience) {
           resumeData.experience = typeof parsedData.experience === 'object' 
             ? JSON.stringify(parsedData.experience) 
             : parsedData.experience;
         }
         
-        // Add other fields that we know exist in the schema
+        // Handle education
+        if (parsedData.education) {
+          resumeData.education = typeof parsedData.education === 'object' 
+            ? JSON.stringify(parsedData.education) 
+            : parsedData.education;
+        }
+        
+        // Handle projects
+        if (parsedData.projects) {
+          resumeData.projects = typeof parsedData.projects === 'object' 
+            ? JSON.stringify(parsedData.projects) 
+            : parsedData.projects;
+        }
+        
+        // Handle personal_information
+        if (parsedData.personal_information) {
+          resumeData.personal_information = typeof parsedData.personal_information === 'object' 
+            ? parsedData.personal_information 
+            : JSON.parse(parsedData.personal_information);
+        }
+        
+        // Add preferred locations
         if (Array.isArray(parsedData.preferred_locations)) {
           resumeData.preferred_locations = parsedData.preferred_locations;
         }
           
+        // Add preferred companies
         if (Array.isArray(parsedData.preferred_companies)) {
           resumeData.preferred_companies = parsedData.preferred_companies;
         }
-          
+        
+        // Add salary ranges  
         resumeData.min_salary = parsedData.min_salary || null;
         resumeData.max_salary = parsedData.max_salary || null;
-        resumeData.preferred_work_type = parsedData.preferred_work_type || null;
         
+        // Add work preferences
+        resumeData.preferred_work_type = parsedData.preferred_work_type || null;
+        resumeData.years_of_experience = parsedData.years_of_experience || null;
+        
+        // Add possible job titles
         if (Array.isArray(parsedData.possible_job_titles)) {
           resumeData.possible_job_titles = parsedData.possible_job_titles;
         }
           
-        // Add summary if it exists in the schema
+        // Add summary
         if (parsedData.summary) {
           resumeData.summary = parsedData.summary;
         }
