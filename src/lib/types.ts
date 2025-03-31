@@ -1,4 +1,7 @@
 
+// Add this console.log to see when types are loaded
+console.log("Loading types.ts module");
+
 export interface Job {
   id: string;
   title: string;
@@ -13,6 +16,22 @@ export interface Job {
   lastScrapedAt?: string;
   source: string;
 }
+
+// Log the Job interface structure to help debug
+console.log("Job interface properties:", Object.keys({
+  id: "",
+  title: "",
+  company: "",
+  location: "",
+  description: "", 
+  applyUrl: "",
+  matchScore: 0,
+  postedDate: "",
+  requirements: [],
+  salaryRange: "",
+  lastScrapedAt: "",
+  source: ""
+}));
 
 export interface Resume {
   id: string;

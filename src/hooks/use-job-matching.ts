@@ -72,22 +72,45 @@ export const useJobMatching = () => {
           job.company
         );
         
-        // Calculate salary match - create a properly formatted job object with required properties
+        // Log the calculateSalaryMatchScore function and its parameters
+        console.log("calculateSalaryMatchScore function:", calculateSalaryMatchScore);
+        console.log("resume.min_salary:", resume.min_salary);
+        console.log("resume.max_salary:", resume.max_salary);
+        console.log("job data:", {
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          salary_min: job.salary_min,
+          salary_max: job.salary_max
+        });
+        
+        // Instead of passing a partial object, let's check the actual imported function signature
+        console.log("Checking imported function signature from matchers/calculateMatchers.ts");
+        
+        // Create a full job object for salary matching
+        const jobForSalaryMatch = {
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          description: "", 
+          applyUrl: "",
+          matchScore: 0,
+          postedDate: "",
+          source: "",
+          requirements: job.requirements,
+          salaryRange: `${job.salary_min || 0}-${job.salary_max || 0}`
+        };
+        
+        // Let's also log the type of the object we're passing
+        console.log("Type of jobForSalaryMatch:", typeof jobForSalaryMatch);
+        
+        // Calculate salary match
         const salaryMatchScore = calculateSalaryMatchScore(
           resume.min_salary,
           resume.max_salary,
-          {
-            id: job.id,
-            title: job.title,
-            company: job.company,
-            location: job.location,
-            description: "",  // Adding required properties with default values
-            applyUrl: "",
-            matchScore: 0,
-            postedDate: "",
-            source: "",
-            salaryRange: `${job.salary_min || 0}-${job.salary_max || 0}`
-          }
+          jobForSalaryMatch
         );
         
         // Calculate overall match score (weighted average)

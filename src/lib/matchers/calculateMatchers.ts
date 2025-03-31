@@ -1,5 +1,12 @@
 
+// Add console.log at the top of this file to see when it's loaded
+console.log("Loading calculateMatchers.ts module");
+
 import { Job, Resume } from "@/lib/types";
+
+// Log the type definitions to help debug
+console.log("Job type definition:", typeof Job);
+console.log("Resume type definition:", typeof Resume);
 
 /**
  * Calculate skill match score between resume skills and job description/requirements
@@ -83,11 +90,15 @@ export function calculateCompanyMatchScore(
  * Calculate salary match score
  * @returns A number between 0-1
  */
+// Add logging to the function signature to see how it's defined
+console.log("Defining calculateSalaryMatchScore function with signature:");
+console.log("calculateSalaryMatchScore(minSalary?: number, maxSalary?: number, job?: Job): number");
 export function calculateSalaryMatchScore(
   minSalary?: number, 
   maxSalary?: number, 
   job?: Job
 ): number {
+  console.log("calculateSalaryMatchScore called with:", { minSalary, maxSalary, job });
   if (!minSalary || !job?.salaryRange) return 0.5; // Neutral score if no salary info
   
   // Try to extract numbers from salary range string
@@ -97,6 +108,7 @@ export function calculateSalaryMatchScore(
   try {
     // Extract numbers from strings like "$50,000 - $80,000"
     const numbers = job.salaryRange.match(/\d[\d,\.]*\d|\d/g);
+    console.log("Extracted numbers from salaryRange:", numbers);
     if (numbers && numbers.length >= 2) {
       jobMinSalary = parseInt(numbers[0].replace(/[^\d]/g, ''));
       jobMaxSalary = parseInt(numbers[1].replace(/[^\d]/g, ''));
