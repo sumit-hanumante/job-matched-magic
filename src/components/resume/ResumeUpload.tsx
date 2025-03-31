@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +15,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string>("");
   const [currentResume, setCurrentResume] = useState<{
     filename?: string;
     status?: string;
@@ -48,10 +50,13 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       }
 
       if (data) {
-        setCurrentResume(prev => ({
-          ...prev,
-          status: 'parsed',
-        }));
+        setCurrentResume({
+          id: data.id,
+          filename: data.file_name,
+          status: data.status,
+          uploaded_at: data.created_at,
+          file_path: data.file_path
+        });
       } else {
         setCurrentResume(null);
       }
@@ -128,14 +133,54 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   };
 
+  const extractTextFromPdf = async (file: File): Promise<string> => {
+    setUploadStatus("Extracting text from PDF...");
+    
+    try {
+      // Use PDF.js to extract text
+      const { getDocument } = await import('pdfjs-dist');
+      const fileReader = new FileReader();
+      
+      return new Promise((resolve, reject) => {
+        fileReader.onload = async (event) => {
+          try {
+            const typedarray = new Uint8Array(event.target?.result as ArrayBuffer);
+            const loadingTask = getDocument({ data: typedarray });
+            const pdf = await loadingTask.promise;
+            
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.map((item: any) => item.str).join(' ');
+              fullText += pageText + '\n';
+            }
+            
+            resolve(fullText);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        
+        fileReader.onerror = reject;
+        fileReader.readAsArrayBuffer(file);
+      });
+    } catch (error) {
+      console.error("Error extracting text from PDF:", error);
+      throw new Error("Failed to extract text from PDF");
+    }
+  };
+
   const uploadResume = async () => {
     if (!file) return;
 
     setIsProcessing(true);
+    setUploadStatus("Starting resume upload and processing...");
     console.log("Starting resume upload and processing...");
 
     try {
       if (!user) {
+        setUploadStatus("No user found, uploading to temporary storage...");
         const tempFileName = `${crypto.randomUUID()}-${file.name}`;
         const { error: uploadError, data } = await supabase.storage
           .from("temp-resumes")
@@ -158,20 +203,35 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         return;
       }
 
+      // Shift existing resumes to make room for the new one
+      setUploadStatus("Preparing database for new resume...");
       await shiftResumes(user.id);
 
+      // Upload file to storage
       const fileExt = file.name.split(".").pop();
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
+      setUploadStatus("Uploading file to storage...");
       const { error: uploadError } = await supabase.storage
         .from("resumes")
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
-
       console.log(`File uploaded to: ${filePath}`);
 
+      // Extract text from PDF/DOCX
+      let resumeText;
+      if (file.type === "application/pdf") {
+        resumeText = await extractTextFromPdf(file);
+        console.log("Extracted text from PDF, length:", resumeText.length);
+      } else {
+        // For now, we'll handle DOCX files later
+        resumeText = "Document text extraction not implemented for this file type.";
+      }
+
+      // Create initial database entry
+      setUploadStatus("Creating database entry...");
       const { error: insertError, data: resumeData } = await supabase
         .from("resumes")
         .insert({
@@ -181,6 +241,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           content_type: file.type,
           status: "uploaded",
           order_index: 1,
+          resume_text: resumeText || ""
         })
         .select()
         .single();
@@ -190,23 +251,13 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         throw insertError;
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("resumes")
-        .getPublicUrl(filePath);
-
-      console.log("Generated public URL:", publicUrl);
-
-      toast({
-        title: "Resume uploaded",
-        description: "Analyzing your resume...",
-      });
-
-      console.log("Invoking parse-resume function with URL:", publicUrl);
-      console.log("Public URL being sent:", publicUrl);
+      // Call Gemini for parsing
+      setUploadStatus("Analyzing resume with AI...");
+      console.log("Sending text to parse-resume function, length:", resumeText?.length || 0);
 
       const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
-        body: JSON.stringify({ resumeUrl: publicUrl }),
+        body: JSON.stringify({ resumeText: resumeText }),
         headers: { "Content-Type": "application/json" },
       });
 
@@ -214,32 +265,53 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
         throw parseError;
       }
 
-      console.log("Parse response:", parseData);
-
       if (!parseData.success) {
         throw new Error(parseData.error || "Failed to parse resume");
       }
 
-      const parsedData = parseData.data;
-      toast({
-        title: "Resume analyzed successfully",
-        description: "Your resume has been processed!",
-      });
+      console.log("Parse response data:", parseData.data);
+      setUploadStatus("AI analysis complete, saving results...");
 
-      await supabase
+      // Update the resume record with parsed data
+      const parsedFields = {
+        status: "parsed",
+        extracted_skills: parseData.data.extracted_skills,
+        summary: parseData.data.summary,
+        experience: parseData.data.experience,
+        education: parseData.data.education,
+        projects: parseData.data.projects,
+        preferred_locations: parseData.data.preferred_locations,
+        preferred_companies: parseData.data.preferred_companies,
+        min_salary: parseData.data.min_salary,
+        max_salary: parseData.data.max_salary,
+        preferred_work_type: parseData.data.preferred_work_type,
+        years_of_experience: parseData.data.years_of_experience,
+        possible_job_titles: parseData.data.possible_job_titles,
+        personal_information: parseData.data.personal_information,
+      };
+
+      console.log("Updating resume with parsed fields:", parsedFields);
+
+      const { error: updateError } = await supabase
         .from("resumes")
-        .update({ status: "parsed" })
+        .update(parsedFields)
         .eq("id", resumeData.id);
 
+      if (updateError) {
+        console.error("Error updating resume with parsed data:", updateError);
+        throw updateError;
+      }
+
       toast({
-        title: "Resume analyzed",
-        description: "Your resume has been processed successfully.",
+        title: "Resume processed",
+        description: "Your resume has been analyzed and your profile is ready.",
       });
 
       resetFileInput();
       await fetchCurrentResume();
     } catch (error) {
       console.error("Error during upload/parsing:", error);
+      setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       toast({
         variant: "destructive",
         title: "Processing failed",
@@ -253,6 +325,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
 
   const resetFileInput = () => {
     setFile(null);
+    setUploadStatus("");
     const fileInput = document.getElementById("file-upload") as HTMLInputElement;
     if (fileInput) fileInput.value = "";
   };
@@ -294,6 +367,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           onUpload={uploadResume}
           onCancel={handleCancel}
           isAuthenticated={!!user}
+          uploadStatus={uploadStatus}
         />
       )}
     </div>
