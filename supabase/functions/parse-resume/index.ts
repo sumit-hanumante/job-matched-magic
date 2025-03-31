@@ -17,57 +17,33 @@ serve(async (req) => {
   console.log("----- parse-resume function: START -----");
 
   try {
-    console.log("Request headers:", JSON.stringify(Object.fromEntries(req.headers), null, 2));
-
-    // 1. Read the raw request body
+    // 1. Read and parse request body
     const rawBody = await req.text();
-    console.log(`Raw request body received, length: ${rawBody.length}`);
-    console.log(`First 100 chars: ${rawBody.substring(0, 100)}...`);
     
     if (!rawBody || rawBody.length === 0) {
-      console.error("Empty request body received");
       throw new Error("Request body is empty");
     }
 
-    // 2. Parse JSON expecting 'resumeText'
-    let resumeText;
-    try {
-      const body = JSON.parse(rawBody);
-      console.log("Request body format => ", Object.keys(body).join(', '));
-      
-      // Handle test requests
-      if (body.test === true) {
-        console.log("Received test request, returning success");
-        return new Response(
-          JSON.stringify({ success: true, message: "Edge function is working properly" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      resumeText = body.resumeText;
-      
-      if (!resumeText && body.resumeUrl) {
-        console.log("No resumeText found but resumeUrl was provided. This is not supported anymore.");
-        throw new Error("Direct text extraction is required. URL-based extraction is no longer supported.");
-      }
-    } catch (parseError) {
-      console.error("JSON parsing error:", parseError);
-      console.error("Raw body preview (first 200 chars):", rawBody.substring(0, 200) + "..."); 
-      throw new Error(`Failed to parse request JSON: ${parseError.message}`);
+    // Parse JSON expecting 'resumeText'
+    let { resumeText, test } = JSON.parse(rawBody);
+    
+    // Handle test requests
+    if (test === true) {
+      console.log("Received test request, returning success");
+      return new Response(
+        JSON.stringify({ success: true, message: "Edge function is working properly" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
     
     if (!resumeText) {
-      console.error("No resume text provided in the request body");
       throw new Error("No resume text provided in the request body");
     }
     
-    console.log("Parsed resumeText length =>", resumeText.length);
-    console.log("First 200 chars of resumeText =>", resumeText.substring(0, 200));
-
-    // 3. Initialize Gemini
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    console.log("Gemini API Key present:", !!geminiApiKey);
+    console.log(`Parsed resumeText length: ${resumeText.length}`);
     
+    // 2. Initialize Gemini API
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiApiKey) {
       console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
       return new Response(
@@ -80,39 +56,10 @@ serve(async (req) => {
       );
     }
     
-    console.log("Initializing Gemini API with provided key");
+    console.log("Initializing Gemini API");
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     
-    // Define response schema
-    const resumeSchema = {
-      type: "object",
-      properties: {
-        personal_information: {
-          type: "object",
-          properties: {
-            name: { type: "string" },
-            email: { type: "string" },
-            phone: { type: "string" },
-            location: { type: "string" }
-          }
-        },
-        summary: { type: "string" },
-        extracted_skills: { type: "array", items: { type: "string" } },
-        experience: { type: "string" },
-        education: { type: "array", items: { type: "string" } },
-        projects: { type: "array", items: { type: "string" } },
-        preferred_locations: { type: "array", items: { type: "string" } },
-        preferred_companies: { type: "array", items: { type: "string" } },
-        min_salary: { type: "number" },
-        max_salary: { type: "number" },
-        preferred_work_type: { type: "string" },
-        years_of_experience: { type: "number" },
-        possible_job_titles: { type: "array", items: { type: "string" } }
-      }
-    };
-    
-    // Use Gemini model for extraction with schema
-    console.log("Setting up extraction model with schema");
+    // 3. Set up the extraction model with basic config
     const extractionModel = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
       generationConfig: {
@@ -123,7 +70,7 @@ serve(async (req) => {
       }
     });
     
-    // 4. Build the prompt using the extracted resume text
+    // 4. Build the prompt
     const prompt = `
       Analyze the following resume text and extract the candidate's details in a format optimized for job matching.
       
@@ -142,79 +89,59 @@ serve(async (req) => {
       - years_of_experience (total years of professional experience as a number)
       - possible_job_titles (array of job titles that would be suitable for this candidate based on their skills and experience)
       
-      Format the skills as a clean array of strings, not nested objects.
-      Make sure salary values are numeric only (no currency symbols or text).
+      Format the response as a valid JSON object.
       
       Resume text:
       ${resumeText}
     `;
     
-    console.log("Sending prompt to Gemini (prompt length) =>", prompt.length);
-    console.log("====== BEFORE GEMINI API CALL ======");
-    console.log("Request timestamp:", new Date().toISOString());
-    console.log("Resume text length:", resumeText.length);
-    console.log("Prompt first 300 chars:", prompt.substring(0, 300) + "...");
+    console.log("Sending prompt to Gemini");
     console.log("Making API call to Gemini...");
     
     try {
-      const startTime = performance.now();
-      
-      // Make the API call
+      // 5. Make the API call
       const result = await extractionModel.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
       
-      const endTime = performance.now();
-      const apiCallDuration = endTime - startTime;
-      
-      console.log("====== AFTER GEMINI API CALL ======");
-      console.log(`API call completed in ${apiCallDuration.toFixed(2)}ms`);
-      
       const rawGeminiResponse = await result.response.text();
-      console.log("Gemini response received");
-      console.log("Response timestamp:", new Date().toISOString());
-      console.log("Response length =>", rawGeminiResponse.length);
-      console.log("Response first 300 chars =>", rawGeminiResponse.substring(0, 300));
+      console.log(`Gemini response received, length: ${rawGeminiResponse.length}`);
       
-      // 6. Attempt to parse Gemini's response as JSON
+      // 6. Parse the response
       let parsedData;
       try {
-        // Remove markdown code blocks if present and parse JSON
+        // Clean the response if it contains markdown code blocks
         const cleanedResponse = rawGeminiResponse.replace(/```json|```/g, '').trim();
-        console.log("Cleaned response (first 300 chars):", cleanedResponse.substring(0, 300));
         parsedData = JSON.parse(cleanedResponse);
-        
         console.log("Successfully parsed JSON response");
-        console.log("Extracted skills count:", parsedData.extracted_skills?.length || 0);
-        console.log("Possible job titles:", parsedData.possible_job_titles?.join(', ') || 'none');
+        
       } catch (parseErr) {
-        console.error("Failed to parse Gemini response as JSON:", parseErr);
+        console.error("Failed to parse Gemini response:", parseErr);
         console.error("Raw Gemini response:", rawGeminiResponse);
         throw new Error("Failed to parse AI response as valid JSON");
       }
       
-      // Ensure all expected fields are present
+      // 7. Format the data with defaults if fields are missing
       const formattedData = {
         personal_information: parsedData.personal_information || {},
         summary: parsedData.summary || "",
-        extracted_skills: parsedData.extracted_skills || [],
+        extracted_skills: Array.isArray(parsedData.extracted_skills) ? parsedData.extracted_skills : [],
         experience: parsedData.experience || "",
-        education: parsedData.education || [],
-        projects: parsedData.projects || [],
-        preferred_locations: parsedData.preferred_locations || [],
-        preferred_companies: parsedData.preferred_companies || [],
+        education: Array.isArray(parsedData.education) ? parsedData.education : [],
+        projects: Array.isArray(parsedData.projects) ? parsedData.projects : [],
+        preferred_locations: Array.isArray(parsedData.preferred_locations) ? parsedData.preferred_locations : [],
+        preferred_companies: Array.isArray(parsedData.preferred_companies) ? parsedData.preferred_companies : [],
         min_salary: parsedData.min_salary || null,
         max_salary: parsedData.max_salary || null,
         preferred_work_type: parsedData.preferred_work_type || null,
         years_of_experience: parsedData.years_of_experience || null,
-        possible_job_titles: parsedData.possible_job_titles || [],
-        resume_text: resumeText // Always include the full resume text
+        possible_job_titles: Array.isArray(parsedData.possible_job_titles) ? parsedData.possible_job_titles : [],
+        resume_text: resumeText
       };
       
-      console.log("Successfully formatted parsed data");
-      console.log("Final response structure:", Object.keys(formattedData).join(', '));
-      console.log("Sending back response with all extracted data");
+      console.log("Successfully formatted data, returning response");
       
+      // 8. Return the structured data
       return new Response(
         JSON.stringify({
           success: true,
@@ -224,29 +151,24 @@ serve(async (req) => {
       );
     } catch (aiError) {
       console.error("Error calling Gemini API:", aiError);
-      console.error("Error details:", JSON.stringify(aiError, null, 2));
       
-      // Return a structured error response
       return new Response(
         JSON.stringify({
           success: false,
-          error: `AI processing error: ${aiError.message || "Unknown error occurred"}`,
-          errorType: aiError.name || "AIProcessingError"
+          error: `AI processing error: ${aiError.message || "Unknown error"}`,
+          errorType: "AIProcessingError"
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
   } catch (error) {
-    console.error("Error in parse-resume =>", error);
-    console.error("Error stack:", error.stack);
+    console.error("Error in parse-resume:", error);
     
-    // For actual errors, return an error response
     return new Response(
       JSON.stringify({
         success: false,
         error: error.message || "Failed to process request",
         errorType: error.name || "Unknown",
-        errorStack: error.stack || "No stack trace available",
       }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
