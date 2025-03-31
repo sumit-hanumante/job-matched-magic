@@ -73,11 +73,13 @@ export const useJobMatching = () => {
         );
         
         // Calculate salary match
+        // Use job as the third parameter to match the function signature in calculateMatchers.ts
         const salaryMatchScore = calculateSalaryMatchScore(
           resume.min_salary,
           resume.max_salary,
-          job.salary_min,
-          job.salary_max
+          {
+            salaryRange: `${job.salary_min || 0}-${job.salary_max || 0}`
+          }
         );
         
         // Calculate overall match score (weighted average)
