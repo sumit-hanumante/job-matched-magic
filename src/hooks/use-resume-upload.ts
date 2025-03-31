@@ -46,9 +46,9 @@ export const useResumeUpload = (
       return fullText.trim();
     } catch (error) {
       console.error("Error extracting PDF text:", error);
-      console.error("Error name:", error.name);
-      console.error("Error message:", error.message);
-      console.error("Error stack:", error.stack);
+      console.error("Error name:", error instanceof Error ? error.name : "Unknown");
+      console.error("Error message:", error instanceof Error ? error.message : String(error));
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
       throw new Error(`PDF extraction failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
@@ -286,32 +286,31 @@ export const useResumeUpload = (
         content_type: file.type,
         status: parsedData ? "processed" : "uploaded",
         order_index: 1,
-        resume_text: extractedText, // Store the full extracted text
+        resume_text: extractedText // Store the full extracted text
       };
 
       // Add parsed fields if available
       if (parsedData) {
-        Object.assign(resumeData, {
-          extracted_skills: parsedData.extracted_skills || [],
-          experience: parsedData.experience || "",
-          education: typeof parsedData.education === 'object' ? JSON.stringify(parsedData.education) : parsedData.education || "",
-          projects: typeof parsedData.projects === 'object' ? JSON.stringify(parsedData.projects) : parsedData.projects || "",
-          preferred_locations: parsedData.preferred_locations || [],
-          preferred_companies: parsedData.preferred_companies || [],
-          min_salary: parsedData.min_salary || null,
-          max_salary: parsedData.max_salary || null,
-          preferred_work_type: parsedData.preferred_work_type || null,
-          years_of_experience: parsedData.years_of_experience || null,
-          possible_job_titles: parsedData.possible_job_titles || [],
-          personal_information: typeof parsedData.personal_information === 'object' ? 
-            JSON.stringify(parsedData.personal_information) : parsedData.personal_information || "",
-          summary: parsedData.summary || ""
-        });
+        console.log("Adding parsed data to resume record");
+        resumeData.extracted_skills = parsedData.extracted_skills || [];
+        resumeData.experience = typeof parsedData.experience === 'object' ? JSON.stringify(parsedData.experience) : parsedData.experience || "";
+        resumeData.education = typeof parsedData.education === 'object' ? JSON.stringify(parsedData.education) : parsedData.education || "";
+        resumeData.projects = typeof parsedData.projects === 'object' ? JSON.stringify(parsedData.projects) : parsedData.projects || "";
+        resumeData.preferred_locations = parsedData.preferred_locations || [];
+        resumeData.preferred_companies = parsedData.preferred_companies || [];
+        resumeData.min_salary = parsedData.min_salary || null;
+        resumeData.max_salary = parsedData.max_salary || null;
+        resumeData.preferred_work_type = parsedData.preferred_work_type || null;
+        resumeData.years_of_experience = parsedData.years_of_experience || null;
+        resumeData.possible_job_titles = parsedData.possible_job_titles || [];
+        resumeData.personal_information = typeof parsedData.personal_information === 'object' ? 
+          JSON.stringify(parsedData.personal_information) : parsedData.personal_information || "";
+        resumeData.summary = parsedData.summary || "";
       }
       
       console.log("Resume data to be inserted:", JSON.stringify({
         ...resumeData,
-        resume_text: `${extractedText.substring(0, 100)}... (truncated)`,
+        resume_text: `${resumeData.resume_text.substring(0, 100)}... (truncated)`,
         extracted_skills: resumeData.extracted_skills || []
       }, null, 2));
 

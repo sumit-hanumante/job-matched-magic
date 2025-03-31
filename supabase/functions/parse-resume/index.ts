@@ -139,19 +139,16 @@ serve(async (req) => {
     let parsedData;
     try {
       // Remove markdown code blocks if present and parse JSON
-      parsedData = JSON.parse(rawGeminiResponse.replace(/```json|```/g, '').trim());
+      const cleanedResponse = rawGeminiResponse.replace(/```json|```/g, '').trim();
+      console.log("Cleaned response (first 300 chars):", cleanedResponse.substring(0, 300));
+      parsedData = JSON.parse(cleanedResponse);
+      
       console.log("Successfully parsed JSON response");
       console.log("Extracted skills count:", parsedData.extracted_skills?.length || 0);
       console.log("Possible job titles:", parsedData.possible_job_titles?.join(', ') || 'none');
       console.log("Experience summary:", parsedData.experience ? "Present" : "Missing");
       console.log("Education:", parsedData.education ? "Present" : "Missing");
       console.log("Projects:", parsedData.projects ? "Present" : "Missing");
-      
-      // Convert experience to string if it's an object/array
-      if (typeof parsedData.experience === 'object' && parsedData.experience !== null) {
-        parsedData.experience = JSON.stringify(parsedData.experience);
-        console.log("Converted experience object to string");
-      }
       
       // Ensure all expected fields are present
       parsedData = {
@@ -168,7 +165,7 @@ serve(async (req) => {
         preferred_work_type: parsedData.preferred_work_type || null,
         years_of_experience: parsedData.years_of_experience || null,
         possible_job_titles: parsedData.possible_job_titles || [],
-        ...parsedData // Include any other fields Gemini might have returned
+        resume_text: resumeText // Always include the full resume text
       };
       
     } catch (parseErr) {
@@ -185,7 +182,8 @@ serve(async (req) => {
         years_of_experience: null,
         experience: "",
         education: [],
-        projects: []
+        projects: [],
+        resume_text: resumeText
       };
     }
     
@@ -193,10 +191,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        data: {
-          ...parsedData,
-          resume_text: resumeText // Always include the full resume text
-        }
+        data: parsedData
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
