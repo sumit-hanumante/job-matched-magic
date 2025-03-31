@@ -209,7 +209,7 @@ export const useResumeUpload = (
       try {
         console.log("Calling edge function with text length:", extractedText.length);
         
-        // Send the request to the edge function with the resumeText directly as object
+        // Send the request to the edge function with the resumeText directly
         console.log("Sending request with body:", { resumeText: extractedText.substring(0, 100) + "..." });
         
         const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
@@ -242,7 +242,6 @@ export const useResumeUpload = (
           console.log("Extracted skills from API:", parsedData.extracted_skills?.length || 0);
           console.log("First few skills:", parsedData.extracted_skills?.slice(0, 5));
           console.log("Experience data:", typeof parsedData.experience);
-          console.log("Education data:", typeof parsedData.education);
         } else {
           console.warn("No data returned from parse function");
         }
@@ -312,6 +311,9 @@ export const useResumeUpload = (
         if (parsedData.summary) {
           resumeData.summary = parsedData.summary;
         }
+
+        // IMPORTANT: We're removing education and projects fields as they don't exist in the database schema
+        // This prevents the "Could not find the 'education' column of 'resumes'" error
       }
       
       console.log("Resume data to be inserted:", JSON.stringify({

@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -172,6 +173,7 @@ serve(async (req) => {
       
       // 6. Format the data with defaults if fields are missing
       // Only include fields that exist in the database schema
+      // NOTE: We've removed 'education' and 'projects' fields as they're not in the database schema
       const formattedData = {
         personal_information: parsedData.personal_information || {},
         summary: parsedData.summary || "",
