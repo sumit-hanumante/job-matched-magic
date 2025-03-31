@@ -73,12 +73,20 @@ serve(async (req) => {
     
     if (!geminiApiKey) {
       console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
-      throw new Error("GEMINI_API_KEY environment variable is not set. Please configure the secret in Supabase.");
+      // Return a more user-friendly error response
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "GEMINI_API_KEY is not configured. Please contact the administrator.",
+          errorType: "MissingAPIKey"
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
     
     console.log("Initializing Gemini API with provided key");
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
     // 4. Build the prompt using the extracted resume text
     const prompt = `
@@ -167,7 +175,17 @@ serve(async (req) => {
       );
     } catch (aiError) {
       console.error("Error calling Gemini API:", aiError);
-      throw new Error(`AI processing error: ${aiError.message}`);
+      console.error("Error details:", JSON.stringify(aiError, null, 2));
+      
+      // Return a structured error response
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `AI processing error: ${aiError.message || "Unknown error occurred"}`,
+          errorType: aiError.name || "AIProcessingError"
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
   } catch (error) {
     console.error("Error in parse-resume =>", error);
