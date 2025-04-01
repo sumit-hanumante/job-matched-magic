@@ -40,8 +40,7 @@ export const useResumeParser = () => {
     console.log("[ResumeParser] First 50 chars of text:", resumeText.substring(0, 50));
     
     try {
-      // Create payload - IMPORTANT: supabase.functions.invoke() handles JSON stringification
-      // BUT we should still ensure our payload is structured correctly
+      // Create payload with the resume text
       const payload = {
         resumeText: resumeText
       };
@@ -50,8 +49,13 @@ export const useResumeParser = () => {
       console.log("[ResumeParser] Request payload resumeText length:", payload.resumeText.length);
       console.log("[ResumeParser] Payload sample:", payload.resumeText.substring(0, 100) + '...');
 
-      // Invoke the edge function
-      console.log("[ResumeParser] Invoking edge function with properly formatted payload");
+      // Log the stringified payload to ensure it's properly formatted
+      console.log("[ResumeParser] Payload as JSON:", JSON.stringify({
+        resumeText: resumeText.substring(0, 50) + "..." // Log truncated version
+      }));
+
+      // Invoke the edge function with specific content-type
+      console.log("[ResumeParser] BEFORE INVOKE: Invoking edge function with resumeText");
       
       const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
@@ -59,19 +63,24 @@ export const useResumeParser = () => {
         body: payload // supabase client automatically handles JSON stringification
       });
       
-      console.log("[ResumeParser] Edge function call completed");
+      console.log("[ResumeParser] AFTER INVOKE: Edge function call completed");
       
       if (parseError) {
         console.error("[ResumeParser] Edge function error:", parseError);
+        console.error("[ResumeParser] Error details:", parseError instanceof Error ? parseError.stack : JSON.stringify(parseError));
         throw parseError;
       }
       
       console.log("[ResumeParser] Edge function response received:", 
         responseData ? Object.keys(responseData) : "No data");
       
+      // Log the complete response for debugging
+      console.log("[ResumeParser] Complete response:", JSON.stringify(responseData, null, 2));
+      
       if (!responseData?.success) {
         const errorMsg = responseData?.error || "Failed to parse resume";
         console.error("[ResumeParser] Edge function execution failed:", errorMsg);
+        console.error("[ResumeParser] Error details:", responseData);
         throw new Error(errorMsg);
       }
       

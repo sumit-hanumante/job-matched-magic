@@ -97,7 +97,7 @@ export const useResumeUpload = (
         // Continue with the process but log the issue
         filePath = `failed-upload-${Date.now()}-${file.name}`;
         toast({
-          variant: "warning",
+          variant: "destructive",
           title: "Storage issue",
           description: "Your resume data will be processed, but the original file couldn't be stored.",
         });
@@ -110,10 +110,12 @@ export const useResumeUpload = (
       let parsedData = null;
       try {
         // Test the parser functionality first
+        console.log("[ResumeUpload] BEFORE TEST: Invoking parse-resume function with test=true");
         const testResult = await supabase.functions.invoke("parse-resume", {
           method: "POST",
           body: { test: true }
         });
+        console.log("[ResumeUpload] AFTER TEST: Received parse-resume test response");
         
         console.log("[ResumeUpload] Parser test response:", testResult);
         
@@ -128,13 +130,52 @@ export const useResumeUpload = (
           console.log("[ResumeUpload] Now parsing resume text with length:", extractedText.length);
           console.log("[ResumeUpload] Text sample for parsing:", extractedText.substring(0, 300));
           
-          // Now actually parse the resume
-          parsedData = await parseResumeText(extractedText);
-          console.log("[ResumeUpload] Resume parsed successfully:", {
-            hasSkills: parsedData?.extracted_skills?.length > 0,
-            skillsCount: parsedData?.extracted_skills?.length || 0,
-            hasSummary: !!parsedData?.summary,
-          });
+          try {
+            // Now actually parse the resume - THIS IS THE GEMINI CALL
+            console.log("[ResumeUpload] BEFORE GEMINI: Invoking parse-resume function with actual resume text");
+            
+            // Create a proper JSON payload with the resume text
+            const geminiPayload = {
+              resumeText: extractedText
+            };
+            
+            console.log("[ResumeUpload] Gemini payload structure:", Object.keys(geminiPayload));
+            console.log("[ResumeUpload] Gemini payload resumeText length:", geminiPayload.resumeText.length);
+            
+            // Make sure we're sending proper JSON to the edge function
+            const geminiResponse = await supabase.functions.invoke("parse-resume", {
+              method: "POST",
+              body: geminiPayload
+            });
+            
+            console.log("[ResumeUpload] AFTER GEMINI: Received parse-resume response");
+            console.log("[ResumeUpload] Gemini complete response:", geminiResponse);
+            
+            if (geminiResponse.error) {
+              console.error("[ResumeUpload] Gemini API call failed:", geminiResponse.error);
+              throw new Error(`Gemini API call failed: ${geminiResponse.error.message || "Unknown error"}`);
+            }
+            
+            if (!geminiResponse.data?.success) {
+              console.error("[ResumeUpload] Gemini API returned failure:", geminiResponse.data);
+              throw new Error(`Gemini API returned failure: ${geminiResponse.data?.error || "Unknown error"}`);
+            }
+            
+            parsedData = geminiResponse.data?.data;
+            console.log("[ResumeUpload] Successfully parsed resume data from Gemini:", parsedData);
+            
+            // Log skills for debugging
+            if (parsedData?.extracted_skills?.length > 0) {
+              console.log("[ResumeUpload] Extracted skills:", parsedData.extracted_skills);
+            } else {
+              console.warn("[ResumeUpload] No skills were extracted from the resume");
+            }
+            
+          } catch (geminiError) {
+            console.error("[ResumeUpload] Error in Gemini call:", geminiError);
+            console.error("[ResumeUpload] Error details:", geminiError instanceof Error ? geminiError.stack : String(geminiError));
+            throw geminiError;
+          }
         } else {
           console.error("[ResumeUpload] Parser test returned unexpected format:", testResult);
           toast({
@@ -199,11 +240,13 @@ export const useResumeUpload = (
         });
         
         // Direct supabase insert for debugging
-        console.log("[ResumeUpload] Executing direct DB insert...");
+        console.log("[ResumeUpload] BEFORE DB INSERT: Executing direct DB insert...");
         const { data: directData, error: directError } = await supabase
           .from("resumes")
           .insert(resumeData)
           .select();
+        
+        console.log("[ResumeUpload] AFTER DB INSERT: Insert completed");
         
         if (directError) {
           console.error("[ResumeUpload] Direct DB insert failed:", directError);

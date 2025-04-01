@@ -26,7 +26,8 @@ serve(async (req) => {
     let parsedBody: ResumeParseRequest;
     try {
       // Clone the request before reading the body to avoid consuming it
-      const requestText = await req.text();
+      const requestClone = req.clone();
+      const requestText = await requestClone.text();
       console.log("Raw request body length:", requestText.length);
       
       if (requestText.length > 0) {
