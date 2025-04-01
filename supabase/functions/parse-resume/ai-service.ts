@@ -26,6 +26,7 @@ export async function processWithAI(prompt: string, apiKey: string): Promise<Par
   console.log("Making API request to:", apiUrl);
   console.log("Request payload size:", JSON.stringify(requestPayload).length);
   console.log("Request headers: Content-Type=application/json");
+  console.log("Request prompt first 100 chars:", prompt.substring(0, 100) + "...");
 
   try {
     console.log("Starting fetch to Gemini API at:", new Date().toISOString());

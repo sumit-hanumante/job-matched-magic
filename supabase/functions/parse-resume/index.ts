@@ -19,14 +19,22 @@ serve(async (req) => {
   try {
     // Debug request information
     console.log("Request method:", req.method);
+    console.log("Request URL:", req.url);
     console.log("Request headers:", JSON.stringify(Object.fromEntries(req.headers.entries()), null, 2));
     
     // 1. Parse the request body
     let parsedBody: ResumeParseRequest;
     try {
-      const requestText = await req.text();
+      // Clone the request before reading the body
+      const clonedReq = req.clone();
+      const requestText = await clonedReq.text();
       console.log("Raw request body length:", requestText.length);
-      console.log("Request body preview (first 200 chars):", requestText.substring(0, 200));
+      
+      if (requestText.length > 0) {
+        console.log("Request body preview (first 200 chars):", requestText.substring(0, 200));
+      } else {
+        console.error("CRITICAL ERROR: Empty request body received");
+      }
       
       if (!requestText || requestText.trim() === "") {
         throw new Error("Empty request body");
@@ -35,15 +43,15 @@ serve(async (req) => {
       try {
         parsedBody = JSON.parse(requestText);
         console.log("Parsed JSON body successfully");
+        console.log("Body keys:", Object.keys(parsedBody));
       } catch (jsonError) {
         console.error("JSON parse error:", jsonError);
+        console.error("Failed JSON content:", requestText);
         throw new Error(`Failed to parse JSON: ${jsonError.message}`);
       }
-      
-      console.log("Request body parsed successfully");
-      console.log("Body keys:", Object.keys(parsedBody));
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
+      console.error("Error details:", parseError.stack || "No stack available");
       throw new Error(`Invalid or empty request body: ${parseError.message}`);
     }
     
@@ -144,9 +152,11 @@ serve(async (req) => {
         processingTime: Date.now() - startTime
       };
 
+      const responseJson = JSON.stringify(response);
       console.log("Returning success response:", {
         success: true,
         processingTime: Date.now() - startTime,
+        responseSize: responseJson.length,
         dataKeys: Object.keys(formattedData)
       });
       
@@ -154,7 +164,7 @@ serve(async (req) => {
       console.log("Response headers:", JSON.stringify({ ...corsHeaders, "Content-Type": "application/json" }));
       
       return new Response(
-        JSON.stringify(response),
+        responseJson,
         { 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }

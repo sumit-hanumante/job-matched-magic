@@ -45,8 +45,13 @@ export const useResumeParser = () => {
       
       console.log("Request payload:", JSON.stringify(requestPayload).substring(0, 100) + "...");
       console.log("Request headers:", { "Content-Type": "application/json" });
+
+      // Log the function URL for debugging
+      const functionUrl = `${supabase.supabaseUrl}/functions/v1/parse-resume`;
+      console.log("Edge function URL:", functionUrl);
       
       // Using supabase.functions.invoke which handles auth tokens and other details automatically
+      console.log("Invoking edge function with supabase.functions.invoke...");
       const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -62,6 +67,34 @@ export const useResumeParser = () => {
           code: parseError.code,
           stack: parseError.stack,
         });
+        
+        // Try a direct fetch to get more error details
+        console.log("Attempting direct fetch for more error details...");
+        try {
+          const directResponse = await fetch(functionUrl, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabase.auth.getSession().then(res => res.data.session?.access_token || '')}`
+            },
+            body: JSON.stringify(requestPayload)
+          });
+          
+          console.log("Direct fetch response:", {
+            status: directResponse.status,
+            statusText: directResponse.statusText
+          });
+          
+          try {
+            const responseText = await directResponse.text();
+            console.log("Direct fetch response body:", responseText);
+          } catch (e) {
+            console.error("Failed to read direct fetch response body:", e);
+          }
+        } catch (directFetchError) {
+          console.error("Direct fetch error:", directFetchError);
+        }
+        
         throw parseError;
       }
       
