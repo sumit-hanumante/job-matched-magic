@@ -3,6 +3,9 @@
 [functions.parse-resume]
 verify_jwt = false
 
+[functions.generate-embeddings]
+verify_jwt = false
+
 [functions.scrape-jobs]
 verify_jwt = true
 
