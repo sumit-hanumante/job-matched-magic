@@ -102,6 +102,7 @@ export const useResumeUpload = (
           });
         } else {
           console.log("[ResumeUpload] Now parsing resume text with length:", extractedText.length);
+          console.log("[ResumeUpload] Text sample for parsing:", extractedText.substring(0, 300));
           
           // Now actually parse the resume
           parsedData = await parseResumeText(extractedText);

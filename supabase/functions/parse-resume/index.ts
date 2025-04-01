@@ -240,9 +240,10 @@ serve(async (req) => {
       { 
         status: 400, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
-    );
-  } finally {
+        }
+      );
+    }
+  finally {
     console.log(`----- parse-resume function: END (took ${Date.now() - startTime}ms) -----`);
   }
 });
