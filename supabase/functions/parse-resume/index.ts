@@ -23,12 +23,25 @@ serve(async (req) => {
     // 1. Parse the request body
     let parsedBody: ResumeParseRequest;
     try {
-      parsedBody = await req.json();
+      const requestText = await req.text();
+      console.log("Raw request body:", requestText.substring(0, 100) + (requestText.length > 100 ? "..." : ""));
+      
+      if (!requestText || requestText.trim() === "") {
+        throw new Error("Empty request body");
+      }
+      
+      try {
+        parsedBody = JSON.parse(requestText);
+      } catch (jsonError) {
+        console.error("JSON parse error:", jsonError);
+        throw new Error(`Failed to parse JSON: ${jsonError.message}`);
+      }
+      
       console.log("Request body parsed successfully");
       console.log("Body keys:", Object.keys(parsedBody));
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
-      throw new Error("Invalid or empty request body");
+      throw new Error(`Invalid or empty request body: ${parseError.message}`);
     }
     
     const { resumeText, test } = parsedBody;

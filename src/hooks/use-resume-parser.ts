@@ -29,15 +29,22 @@ export const useResumeParser = () => {
   // Parse the resume text using the edge function
   const parseResumeText = async (resumeText: string) => {
     if (!resumeText || resumeText.length < 10) {
+      console.error("Resume text is too short:", resumeText);
       throw new Error("Resume text is too short to be parsed");
     }
 
     console.log(`Sending ${resumeText.length} characters of text to parse function`);
+    console.log("First 50 chars of text:", resumeText.substring(0, 50));
     
     try {
+      // Make sure we're sending a properly formatted JSON object
+      const requestPayload = { resumeText };
+      
+      console.log("Request payload:", JSON.stringify(requestPayload).substring(0, 100) + "...");
+      
       const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
-        body: { resumeText }
+        body: requestPayload
       });
       
       if (parseError) {
@@ -73,6 +80,8 @@ export const useResumeParser = () => {
       }
     } catch (error) {
       console.error("Error parsing resume:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack available");
+      
       // Return minimal valid structure instead of throwing
       return {
         summary: "Resume parsing failed. Please try again later.",
