@@ -64,6 +64,9 @@ export async function processWithAI(prompt: string, apiKey: string): Promise<Par
     const responseData = await response.json();
     console.log("Gemini API response JSON parsed successfully");
     
+    // Print complete Gemini API response to console for debugging
+    console.log("COMPLETE GEMINI API RESPONSE:", JSON.stringify(responseData, null, 2));
+    
     if (!responseData.candidates || responseData.candidates.length === 0) {
       console.error("No candidates in Gemini response:", JSON.stringify(responseData));
       throw new Error("No content in Gemini API response");
@@ -80,6 +83,9 @@ export async function processWithAI(prompt: string, apiKey: string): Promise<Par
     console.log(`Raw text response length: ${rawText.length}`);
     console.log(`Response preview: ${rawText.substring(0, 150)}...`);
     
+    // Print the complete raw text response from Gemini for debugging
+    console.log("COMPLETE GEMINI RAW TEXT RESPONSE:", rawText);
+    
     // Parse the JSON from the response
     try {
       // Find JSON in the text (in case the model wrapped it with markdown)
@@ -92,6 +98,9 @@ export async function processWithAI(prompt: string, apiKey: string): Promise<Par
       const parsedData = JSON.parse(jsonString);
       console.log("Successfully parsed JSON response");
       console.log("Parsed data keys:", Object.keys(parsedData));
+      
+      // Print the complete parsed JSON for debugging
+      console.log("COMPLETE PARSED JSON DATA:", JSON.stringify(parsedData, null, 2));
       
       // Ensure extracted_skills is always a string array
       if (parsedData.extracted_skills) {
