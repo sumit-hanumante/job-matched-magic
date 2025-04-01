@@ -1,15 +1,15 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { corsHeaders } from "./cors-headers.ts";
+import { ResumeParseRequest, ParsedResumeResponse } from "./types.ts";
+import { processWithAI } from "./ai-service.ts";
+import { buildResumeParsingPrompt } from "./prompts.ts";
+import { formatParsedData } from "./formatter.ts";
 
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
+    console.log("Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -19,18 +19,37 @@ serve(async (req) => {
   try {
     // Debug request information
     console.log("Request method:", req.method);
+    console.log("Request URL:", req.url);
     console.log("Request headers:", JSON.stringify(Object.fromEntries(req.headers.entries()), null, 2));
     
     // 1. Parse the request body
-    let parsedBody;
+    let parsedBody: ResumeParseRequest;
     try {
-      // First try to get the body as already parsed from Supabase client
-      parsedBody = await req.json();
-      console.log("Request body parsed successfully");
-      console.log("Body keys:", Object.keys(parsedBody));
+      // Clone the request before reading the body to avoid consuming it
+      const requestClone = req.clone();
+      const requestText = await requestClone.text();
+      console.log("Raw request body length:", requestText.length);
+      
+      if (requestText.length > 0) {
+        console.log("Request body preview (first 200 chars):", requestText.substring(0, 200));
+      } else {
+        console.error("CRITICAL ERROR: Empty request body received");
+        throw new Error("Empty request body");
+      }
+      
+      try {
+        parsedBody = JSON.parse(requestText);
+        console.log("Parsed JSON body successfully");
+        console.log("Body keys:", Object.keys(parsedBody));
+      } catch (jsonError) {
+        console.error("JSON parse error:", jsonError);
+        console.error("Failed JSON content:", requestText);
+        throw new Error(`Failed to parse JSON: ${jsonError.message}`);
+      }
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
-      throw new Error("Invalid or empty request body");
+      console.error("Error details:", parseError.stack || "No stack available");
+      throw new Error(`Invalid or empty request body: ${parseError.message}`);
     }
     
     const { resumeText, test } = parsedBody;
@@ -39,200 +58,190 @@ serve(async (req) => {
     // Handle test requests
     if (test === true) {
       console.log("Received test request, returning success");
+      const response = {
+        success: true,
+        message: "Edge function is working properly"
+      };
+      
+      console.log("Test response:", JSON.stringify(response));
+      
       return new Response(
-        JSON.stringify({ success: true, message: "Edge function is working properly" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify(response),
+        { 
+          headers: corsHeaders 
+        }
       );
     }
     
-    if (!resumeText) {
+    if (!resumeText || typeof resumeText !== 'string') {
       console.error("No resumeText provided in request body. Keys found:", Object.keys(parsedBody));
       throw new Error("No resume text provided in the request body");
     }
     
     console.log(`Parsed resumeText length: ${resumeText.length}`);
-    console.log(`resumeText preview: ${resumeText.substring(0, 100)}...`);
+    if (resumeText.length > 0) {
+      console.log(`resumeText preview: ${resumeText.substring(0, 100)}...`);
+    }
     
     // 2. Get the API key and validate it
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+    
+    // DETAILED DEBUG: Environment checks
+    console.log("Environment diagnostic information:");
+    console.log("Environment object type:", typeof Deno.env);
+    console.log("Available environment methods:", Object.getOwnPropertyNames(Deno.env));
+    
+    try {
+      const envKeys = Object.keys(Deno.env.toObject());
+      console.log("All environment variables:", envKeys);
+      console.log("Total environment variables:", envKeys.length);
+      
+      // Check for similar keys (case insensitive)
+      const similarKeys = envKeys.filter(key => 
+        key.toLowerCase().includes('gemini') || 
+        key.toLowerCase().includes('api') || 
+        key.toLowerCase().includes('key')
+      );
+      if (similarKeys.length > 0) {
+        console.log("Found similar environment keys:", similarKeys);
+      }
+    } catch (envError) {
+      console.error("Error accessing environment variables:", envError);
+    }
+    
+    // Check API key existence
+    console.log("GEMINI_API_KEY check in index.ts:");
     if (!geminiApiKey) {
-      console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
+      console.error("CRITICAL ERROR: GEMINI_API_KEY environment variable is missing or empty!");
+    } else {
+      console.log(`GEMINI_API_KEY exists with length: ${geminiApiKey.length}`);
+      console.log(`GEMINI_API_KEY first 4 chars: ${geminiApiKey.substring(0, 4)}...`);
+      console.log(`GEMINI_API_KEY last 4 chars: ...${geminiApiKey.substring(geminiApiKey.length - 4)}`);
+    }
+    
+    if (!geminiApiKey) {
+      console.error("GEMINI_API_KEY is not configured. Please check Supabase Edge Function Secrets.");
+      const errorResponse = {
+        success: false,
+        error: "GEMINI_API_KEY is not configured. Please contact the administrator.",
+        errorType: "MissingAPIKey"
+      };
+      
+      console.log("Returning error response:", JSON.stringify(errorResponse));
+      
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: "GEMINI_API_KEY is not configured. Please contact the administrator.",
-          errorType: "MissingAPIKey"
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify(errorResponse),
+        { 
+          status: 400, 
+          headers: corsHeaders 
+        }
       );
     }
     
     console.log("GEMINI_API_KEY found with length:", geminiApiKey.length);
     
-    // 3. Build the prompt for resume parsing - aligned with our database schema
-    const prompt = `
-      Analyze this resume and extract details in JSON format optimized for job matching:
-      
-      Return a JSON with these keys:
-      - personal_information (name, email, phone, location)
-      - summary (brief candidate overview)
-      - extracted_skills (array of technical skills, soft skills, tools)
-      - experience (work history with company, role, dates, responsibilities)
-      - education (degrees, institutions, dates)
-      - projects (name, description, tech stack used)
-      - preferred_locations (array of locations preferred)
-      - preferred_companies (array of company names the candidate has mentioned interest in)
-      - min_salary (minimum salary as number without currency symbols)
-      - max_salary (maximum salary as number without currency symbols)
-      - preferred_work_type (remote, hybrid, on-site)
-      - years_of_experience (total years of experience as number)
-      - possible_job_titles (suitable job titles based on skills/experience)
-      
-      Keep skills as a clean array of strings. Salary values should be numeric only.
-      
-      Resume text:
-      ${resumeText}
-    `;
-
+    // 3. Build the prompt for resume parsing
+    const prompt = buildResumeParsingPrompt(resumeText);
     console.log("Prepared prompt with length:", prompt.length);
     
-    // 4. Direct API call to Gemini using fetch
+    // 4. Process with AI
     try {
       const apiStartTime = Date.now();
-      console.log(`Using Gemini API with key starting with: ${geminiApiKey.substring(0, 4)}...`);
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
-      
-      // Create the request payload
-      const requestPayload = {
-        contents: [
-          {
-            parts: [
-              { text: prompt }
-            ]
-          }
-        ]
-      };
-      
-      // Log the full request details (URL and payload)
-      console.log("Making API request to:", apiUrl);
-      console.log("Request payload size:", JSON.stringify(requestPayload).length);
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestPayload)
-      });
-      
+      console.log("Calling Gemini API at:", new Date().toISOString());
+      const parsedData = await processWithAI(prompt, geminiApiKey);
       console.log(`Gemini API response received in ${Date.now() - apiStartTime}ms`);
-      console.log(`Response status: ${response.status} ${response.statusText}`);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Gemini API error: ${response.status} ${response.statusText}`);
-        console.error(`Error details: ${errorText}`);
-        throw new Error(`Gemini API returned error ${response.status}: ${errorText}`);
+      // Log raw API response for debugging
+      console.log("Gemini raw output:", JSON.stringify(parsedData, null, 2));
+      
+      // Check if we have skills
+      if (!parsedData.extracted_skills || 
+          (Array.isArray(parsedData.extracted_skills) && parsedData.extracted_skills.length === 0)) {
+        console.warn("Warning: No skills extracted from resume by Gemini API");
+      } else {
+        console.log("Skills extracted successfully:", 
+                    typeof parsedData.extracted_skills === 'string' 
+                      ? parsedData.extracted_skills.substring(0, 100) + '...'
+                      : Array.isArray(parsedData.extracted_skills) 
+                        ? parsedData.extracted_skills.slice(0, 5) 
+                        : 'Invalid format');
       }
       
-      const responseData = await response.json();
-      console.log("Received response from Gemini API");
-      console.log("Response structure:", JSON.stringify(Object.keys(responseData)));
+      // 5. Format the data with defaults
+      const formattedData = formatParsedData(parsedData, resumeText);
       
-      if (!responseData.candidates || responseData.candidates.length === 0) {
-        console.error("No candidates in Gemini response:", JSON.stringify(responseData));
-        throw new Error("No content in Gemini API response");
-      }
-      
-      // Extract the text from the response
-      const candidateContent = responseData.candidates[0].content;
-      if (!candidateContent || !candidateContent.parts || candidateContent.parts.length === 0) {
-        console.error("Unexpected Gemini response format:", JSON.stringify(responseData));
-        throw new Error("Unexpected Gemini response format");
-      }
-      
-      const rawText = candidateContent.parts[0].text;
-      console.log(`Raw text response length: ${rawText.length}`);
-      console.log(`Response preview: ${rawText.substring(0, 150)}...`);
-      
-      // 5. Parse the JSON from the response
-      let parsedData;
-      try {
-        // Find JSON in the text (in case the model wrapped it with markdown)
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        const jsonString = jsonMatch ? jsonMatch[0] : rawText;
-        
-        console.log("Attempting to parse JSON from response...");
-        parsedData = JSON.parse(jsonString);
-        console.log("Successfully parsed JSON response");
-        console.log("Parsed data keys:", Object.keys(parsedData));
-        
-      } catch (parseErr) {
-        console.error("Failed to parse Gemini response as JSON:", parseErr);
-        console.error("Raw text response:", rawText);
-        throw new Error("Failed to parse AI response as valid JSON");
-      }
-      
-      // 6. Format the data with defaults if fields are missing
-      // Based on our updated Supabase database schema for the 'resumes' table
-      const formattedData = {
-        summary: parsedData.summary || "",
-        extracted_skills: Array.isArray(parsedData.extracted_skills) ? parsedData.extracted_skills : [],
-        experience: parsedData.experience || "",
-        education: parsedData.education || "",
-        projects: parsedData.projects || "",
-        preferred_locations: Array.isArray(parsedData.preferred_locations) ? parsedData.preferred_locations : [],
-        preferred_companies: Array.isArray(parsedData.preferred_companies) ? parsedData.preferred_companies : [],
-        min_salary: parsedData.min_salary || null,
-        max_salary: parsedData.max_salary || null,
-        preferred_work_type: parsedData.preferred_work_type || null,
-        years_of_experience: parsedData.years_of_experience || null,
-        possible_job_titles: Array.isArray(parsedData.possible_job_titles) ? parsedData.possible_job_titles : [],
-        personal_information: parsedData.personal_information || {},
-        resume_text: resumeText
-      };
-      
-      console.log("Successfully formatted data, returning response");
-      console.log("Skills count:", formattedData.extracted_skills.length);
-      if (formattedData.extracted_skills.length > 0) {
+      console.log("Successfully formatted data, preparing response");
+      console.log("Skills count:", formattedData.extracted_skills?.length || 0);
+      if (formattedData.extracted_skills && formattedData.extracted_skills.length > 0) {
         console.log("Sample skills:", formattedData.extracted_skills.slice(0, 5));
       }
       
-      // 7. Return the structured data
+      // 6. Return the structured data
+      const response: ParsedResumeResponse = {
+        success: true,
+        data: formattedData,
+        processingTime: Date.now() - startTime
+      };
+
+      const responseJson = JSON.stringify(response);
+      console.log("Returning success response:", {
+        success: true,
+        processingTime: Date.now() - startTime,
+        responseSize: responseJson.length,
+        dataKeys: Object.keys(formattedData)
+      });
+      
+      // Log complete response structure before sending
+      console.log("Response headers:", JSON.stringify(corsHeaders));
+      
       return new Response(
-        JSON.stringify({
-          success: true,
-          data: formattedData,
-          processingTime: Date.now() - startTime
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        responseJson,
+        { 
+          headers: corsHeaders 
+        }
       );
       
     } catch (apiError) {
       console.error("Error calling Gemini API:", apiError);
       console.error("Error details:", apiError.stack || "No stack trace available");
       
+      const errorResponse = {
+        success: false,
+        error: `AI processing error: ${apiError.message || "Unknown error"}`,
+        errorType: "AIProcessingError"
+      };
+      
+      console.log("Returning error response:", JSON.stringify(errorResponse));
+      console.log("Response headers:", JSON.stringify(corsHeaders));
+      
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: `AI processing error: ${apiError.message || "Unknown error"}`,
-          errorType: "AIProcessingError"
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify(errorResponse),
+        { 
+          status: 500, 
+          headers: corsHeaders 
+        }
       );
     }
   } catch (error) {
     console.error("Error in parse-resume:", error);
     console.error("Error stack:", error.stack || "No stack trace available");
     
+    const errorResponse = {
+      success: false,
+      error: error.message || "Failed to process request",
+      errorType: error.name || "Unknown",
+      processingTime: Date.now() - startTime
+    };
+    
+    console.log("Returning error response:", JSON.stringify(errorResponse));
+    console.log("Response headers:", JSON.stringify(corsHeaders));
+    
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || "Failed to process request",
-        errorType: error.name || "Unknown",
-        processingTime: Date.now() - startTime
-      }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify(errorResponse),
+      { 
+        status: 400, 
+        headers: corsHeaders 
+      }
     );
   } finally {
     console.log(`----- parse-resume function: END (took ${Date.now() - startTime}ms) -----`);

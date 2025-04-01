@@ -1,94 +1,23 @@
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { shiftResumes } from "@/lib/resume-utils";
-import * as pdfjsLib from "pdfjs-dist";
-
-// Dynamically determine the proper worker URL based on the PDF.js version
-const pdfVersion = pdfjsLib.version || "2.16.105";
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
+import { useDocumentTextExtractor } from "./use-document-text-extractor";
+import { useStorageService } from "./use-storage-service";
+import { useResumeParser } from "./use-resume-parser";
+import { useResumeDatabase } from "./use-resume-database";
+import { supabase } from "@/lib/supabase";
 
 export const useResumeUpload = (
   user: any,
   onLoginRequired?: (email?: string, fullName?: string) => void
 ) => {
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
-
-  // Function to extract clean text from a PDF using pdfjs-dist.
-  const extractCleanTextFromPDF = async (file: File): Promise<string> => {
-    try {
-      console.log("Starting PDF text extraction");
-      const arrayBuffer = await file.arrayBuffer();
-      console.log(`PDF buffer created, size: ${arrayBuffer.byteLength} bytes`);
-      
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      console.log("PDF loading task created");
-      
-      const pdf = await loadingTask.promise;
-      console.log(`PDF loaded successfully, pages: ${pdf.numPages}`);
-      
-      let fullText = "";
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        console.log(`Processing page ${pageNum}/${pdf.numPages}`);
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        
-        // Join text items from the page.
-        const pageText = textContent.items.map((item: any) => item.str).join(" ");
-        fullText += pageText + "\n";
-        console.log(`Page ${pageNum} extracted, text length: ${pageText.length}`);
-      }
-      
-      console.log(`PDF extraction complete, total text length: ${fullText.length}`);
-      return fullText.trim();
-    } catch (error) {
-      console.error("Error extracting PDF text:", error);
-      console.error("Error name:", error instanceof Error ? error.name : "Unknown");
-      console.error("Error message:", error instanceof Error ? error.message : String(error));
-      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
-      throw new Error(`PDF extraction failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  // Extract text from DOCX (using file.text() as fallback)
-  const extractTextFromFile = async (file: File): Promise<string> => {
-    console.log(`Extracting text from ${file.name} (${file.type})`);
-    console.log(`File size: ${file.size} bytes`);
-    
-    try {
-      if (file.type === "application/pdf") {
-        console.log("Using PDF extraction method");
-        const text = await extractCleanTextFromPDF(file);
-        console.log(`PDF extraction successful, text length: ${text.length}`);
-        return text;
-      } else if (
-        file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ) {
-        console.log("Using DOCX extraction method (file.text())");
-        const text = await file.text();
-        console.log(`DOCX text extracted, length: ${text.length}`);
-        return text;
-      } else {
-        console.error("Unsupported file type:", file.type);
-        throw new Error("Unsupported file type: " + file.type);
-      }
-    } catch (error) {
-      console.error("Text extraction failed:", error);
-      console.error("Falling back to simple file.text() method");
-      
-      // Last resort: try to get the raw text
-      try {
-        const rawText = await file.text();
-        console.log(`Fallback text extraction method returned ${rawText.length} characters`);
-        return rawText;
-      } catch (fallbackError) {
-        console.error("Even fallback extraction failed:", fallbackError);
-        throw new Error("Could not extract text from file using any available method");
-      }
-    }
-  };
+  const { extractTextFromFile } = useDocumentTextExtractor();
+  const { uploadToTempStorage, uploadToPermanentStorage, getFilePublicUrl, deleteFile } = useStorageService();
+  const { parseResumeText } = useResumeParser();
+  const { shiftOlderResumes, insertResume } = useResumeDatabase();
 
   // Main function to upload resume.
   const uploadResume = async (file: File) => {
@@ -96,8 +25,9 @@ export const useResumeUpload = (
     
     try {
       setIsUploading(true);
-      console.log("Starting resume upload process...");
-      console.log("File details:", {
+      setUploadProgress(10);
+      console.log("[ResumeUpload] Starting resume upload process...");
+      console.log("[ResumeUpload] File details:", {
         name: file.name,
         type: file.type,
         size: Math.round(file.size / 1024) + " KB",
@@ -105,267 +35,250 @@ export const useResumeUpload = (
 
       // --- UNAUTHENTICATED FLOW ---
       if (!user) {
-        console.log("User not authenticated, performing unauthenticated flow");
-        const tempFileName = `${crypto.randomUUID()}-${file.name}`;
-        console.log(`Creating temporary file: ${tempFileName}`);
+        console.log("[ResumeUpload] User not authenticated, performing unauthenticated flow");
         
-        // First, let's ensure the buckets exist
         try {
-          console.log("Creating or checking temp-resumes bucket");
-          await supabase.storage.createBucket('temp-resumes', {
-            public: true,
-            fileSizeLimit: 10485760 // 10MB
-          });
-          console.log("temp-resumes bucket ready");
-        } catch (bucketError) {
-          // Ignore errors about bucket already exists
-          console.log("Bucket operation result:", bucketError);
+          await uploadToTempStorage(file);
+        } catch (storageError) {
+          console.error("[ResumeUpload] Storage error:", storageError);
+          // If we get an RLS policy error, continue with the flow but show a more specific message
+          if (storageError.message?.includes('row-level security policy')) {
+            toast({
+              variant: "destructive",
+              title: "Storage permission error",
+              description: "There was an issue with storage permissions. Please try logging in first.",
+            });
+          }
         }
-        
-        const { error: uploadError, data } = await supabase.storage
-          .from("temp-resumes")
-          .upload(tempFileName, file);
-          
-        if (uploadError) {
-          console.error("Error uploading temporary file:", uploadError);
-          throw uploadError;
-        }
-        
-        console.log("Temporary file uploaded successfully");
         
         if (onLoginRequired) {
-          console.log("Prompting user to login/register");
+          console.log("[ResumeUpload] Prompting user to login/register");
           onLoginRequired();
         }
         
         toast({
-          title: "File uploaded successfully",
-          description:
-            "Please create an account to analyze your resume and get job matches.",
+          title: "Please create an account",
+          description: "Please create an account to analyze your resume and get job matches.",
         });
         
         return false;
       }
 
       // --- AUTHENTICATED FLOW ---
-      console.log("Beginning authenticated flow for user ID:", user.id);
+      console.log(`[ResumeUpload] Beginning authenticated flow for user ID: ${user.id}`);
       
       // 1. Extract text from the file first, to ensure we can process it
-      console.log("Step 1: Extracting text from file");
+      console.log("[ResumeUpload] Step 1: Extracting text from file");
+      setUploadProgress(20);
       const extractedText = await extractTextFromFile(file);
       if (!extractedText || extractedText.length < 10) {
-        console.error("Text extraction failed or returned too little text:", extractedText);
+        console.error("[ResumeUpload] Text extraction failed or returned too little text:", extractedText);
         throw new Error("Failed to extract meaningful text from resume");
       }
-      console.log(`Text extracted successfully (${extractedText.length} chars)`);
+      console.log(`[ResumeUpload] Text extracted successfully (${extractedText.length} chars)`);
+      console.log("[ResumeUpload] Text sample:", extractedText.substring(0, 200));
+      setUploadProgress(30);
       
       // 2. Shift older resumes to maintain order
-      console.log("Step 2: Shifting older resumes");
-      await shiftResumes(user.id);
-      console.log("Resume shifting completed");
+      console.log("[ResumeUpload] Step 2: Shifting older resumes");
+      await shiftOlderResumes(user.id);
+      console.log("[ResumeUpload] Resume shifting completed");
+      setUploadProgress(40);
       
       // 3. Upload the file to storage
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
-      
-      // Ensure buckets exist
+      console.log("[ResumeUpload] Step 3: Uploading file to storage");
+      let filePath;
       try {
-        console.log("Creating or checking resumes bucket");
-        await supabase.storage.createBucket('resumes', {
-          public: false,
-          fileSizeLimit: 10485760 // 10MB
+        filePath = await uploadToPermanentStorage(user.id, file);
+        const publicUrl = getFilePublicUrl(filePath);
+        console.log("[ResumeUpload] File uploaded to storage:", publicUrl);
+      } catch (storageError) {
+        console.error("[ResumeUpload] Storage upload failed:", storageError);
+        // Continue with the process but log the issue
+        filePath = `failed-upload-${Date.now()}-${file.name}`;
+        toast({
+          variant: "destructive",
+          title: "Storage issue",
+          description: "Your resume data will be processed, but the original file couldn't be stored.",
         });
-        console.log("resumes bucket ready");
-      } catch (bucketError) {
-        // Ignore errors about bucket already exists
-        console.log("Bucket operation result:", bucketError);
       }
       
-      console.log(`Step 3: Uploading file to storage: ${filePath}`);
-      const { error: uploadError } = await supabase.storage
-        .from("resumes")
-        .upload(filePath, file);
-        
-      if (uploadError) {
-        console.error("File upload error:", uploadError);
-        throw uploadError;
-      }
-      console.log("File uploaded successfully to storage");
-
-      // 4. Get the public URL (for metadata/reference)
-      console.log("Step 4: Generating public URL");
-      const { data: urlData } = supabase.storage
-        .from("resumes")
-        .getPublicUrl(filePath);
-        
-      console.log("Generated public URL:", urlData.publicUrl);
-
-      // 5. Call the edge function with the extracted text
-      console.log("Step 5: Sending extracted text to parse-resume function...");
-      console.log(`Sending ${extractedText.length} characters of text`);
+      setUploadProgress(60);
       
+      // 4. Parse the resume with AI
+      console.log("[ResumeUpload] Step 4: Testing parser function");
       let parsedData = null;
       try {
-        console.log("Calling edge function with text length:", extractedText.length);
-        
-        // Send the request to the edge function with the resumeText directly
-        console.log("Sending request with body:", { resumeText: extractedText.substring(0, 100) + "..." });
-        
-        const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
+        // Test the parser functionality first
+        console.log("[ResumeUpload] BEFORE TEST: Invoking parse-resume function with test=true");
+        const testResult = await supabase.functions.invoke("parse-resume", {
           method: "POST",
-          body: { resumeText: extractedText }
+          body: { test: true }
         });
+        console.log("[ResumeUpload] AFTER TEST: Received parse-resume test response");
         
-        if (parseError) {
-          console.error("Edge function error details:", {
-            name: parseError.name,
-            message: parseError.message,
-            code: parseError.code,
-            stack: parseError.stack,
+        console.log("[ResumeUpload] Parser test response:", testResult);
+        
+        if (testResult.error) {
+          console.error("[ResumeUpload] Parser test failed:", testResult.error);
+          toast({
+            variant: "destructive",
+            title: "Parser test failed",
+            description: "Could not connect to resume parser. Basic resume will be uploaded.",
           });
-          throw parseError;
-        }
-        
-        console.log("Edge function response received:", responseData ? Object.keys(responseData) : "No data");
-        
-        if (!responseData?.success) {
-          const errorMsg = responseData?.error || "Failed to parse resume";
-          console.error("Edge function execution failed:", errorMsg);
-          throw new Error(errorMsg);
-        }
-        
-        console.log("Resume parsed successfully");
-        if (responseData.data) {
-          console.log("Parsed data keys:", Object.keys(responseData.data));
-          parsedData = responseData.data;
-          console.log("Extracted skills from API:", parsedData.extracted_skills?.length || 0);
-          console.log("First few skills:", parsedData.extracted_skills?.slice(0, 5));
-          console.log("Experience data:", typeof parsedData.experience);
+        } else if (testResult.data?.success) {
+          console.log("[ResumeUpload] Now parsing resume text with length:", extractedText.length);
+          console.log("[ResumeUpload] Text sample for parsing:", extractedText.substring(0, 300));
+          
+          try {
+            // Now actually parse the resume - THIS IS THE GEMINI CALL
+            console.log("[ResumeUpload] BEFORE GEMINI: Invoking parse-resume function with actual resume text");
+            
+            // Create a proper JSON payload with the resume text
+            const geminiPayload = {
+              resumeText: extractedText
+            };
+            
+            console.log("[ResumeUpload] Gemini payload structure:", Object.keys(geminiPayload));
+            console.log("[ResumeUpload] Gemini payload resumeText length:", geminiPayload.resumeText.length);
+            
+            // Make sure we're sending proper JSON to the edge function
+            const geminiResponse = await supabase.functions.invoke("parse-resume", {
+              method: "POST",
+              body: geminiPayload
+            });
+            
+            console.log("[ResumeUpload] AFTER GEMINI: Received parse-resume response");
+            console.log("[ResumeUpload] Gemini complete response:", geminiResponse);
+            
+            if (geminiResponse.error) {
+              console.error("[ResumeUpload] Gemini API call failed:", geminiResponse.error);
+              throw new Error(`Gemini API call failed: ${geminiResponse.error.message || "Unknown error"}`);
+            }
+            
+            if (!geminiResponse.data?.success) {
+              console.error("[ResumeUpload] Gemini API returned failure:", geminiResponse.data);
+              throw new Error(`Gemini API returned failure: ${geminiResponse.data?.error || "Unknown error"}`);
+            }
+            
+            parsedData = geminiResponse.data?.data;
+            console.log("[ResumeUpload] Successfully parsed resume data from Gemini:", parsedData);
+            
+            // Log skills for debugging
+            if (parsedData?.extracted_skills?.length > 0) {
+              console.log("[ResumeUpload] Extracted skills:", parsedData.extracted_skills);
+            } else {
+              console.warn("[ResumeUpload] No skills were extracted from the resume");
+            }
+            
+          } catch (geminiError) {
+            console.error("[ResumeUpload] Error in Gemini call:", geminiError);
+            console.error("[ResumeUpload] Error details:", geminiError instanceof Error ? geminiError.stack : String(geminiError));
+            throw geminiError;
+          }
         } else {
-          console.warn("No data returned from parse function");
+          console.error("[ResumeUpload] Parser test returned unexpected format:", testResult);
+          toast({
+            variant: "destructive",
+            title: "Parser test issue",
+            description: "Resume parser returned an unexpected response. Basic resume will be uploaded.",
+          });
         }
-      } catch (invocationError) {
-        console.error("Edge function invocation error:", invocationError);
-        console.error("Error type:", typeof invocationError);
-        console.error("Error details:", JSON.stringify(invocationError, null, 2));
-        
-        // Fall back to just saving the extracted text without parsing
-        console.log("Falling back to saving raw text without AI parsing");
+      } catch (parseError) {
+        console.error("[ResumeUpload] Resume parsing failed:", parseError);
+        console.log("[ResumeUpload] Proceeding with basic resume data without AI parsing");
+        toast({
+          variant: "destructive",
+          title: "AI parsing failed",
+          description: "Your resume was uploaded but couldn't be automatically analyzed.",
+        });
       }
+      setUploadProgress(80);
       
-      // 6. Insert the resume record into the database
-      console.log("Step 6: Inserting resume record into database...");
+      // 5. Insert the resume record into the database
+      console.log("[ResumeUpload] Step 5: Inserting resume record into database");
       
       // Define the base resume data object with required fields
       const resumeData: Record<string, any> = {
         user_id: user.id,
         file_name: file.name,
-        file_path: filePath,
+        file_path: filePath || 'unknown-path',
         content_type: file.type,
         status: parsedData ? "processed" : "uploaded",
         order_index: 1,
         resume_text: extractedText,
       };
 
-      // Add parsed fields if available - Only if they exist in the database schema
+      // Add parsed fields if available
       if (parsedData) {
-        console.log("Adding parsed data to resume record");
+        console.log("[ResumeUpload] Adding parsed data to resume record");
         
-        // Handle skills
-        if (Array.isArray(parsedData.extracted_skills)) {
-          resumeData.extracted_skills = parsedData.extracted_skills;
-        }
-        
-        // Handle experience
-        if (parsedData.experience) {
-          resumeData.experience = typeof parsedData.experience === 'object' 
-            ? JSON.stringify(parsedData.experience) 
-            : parsedData.experience;
-        }
-        
-        // Handle education
-        if (parsedData.education) {
-          resumeData.education = typeof parsedData.education === 'object' 
-            ? JSON.stringify(parsedData.education) 
-            : parsedData.education;
-        }
-        
-        // Handle projects
-        if (parsedData.projects) {
-          resumeData.projects = typeof parsedData.projects === 'object' 
-            ? JSON.stringify(parsedData.projects) 
-            : parsedData.projects;
-        }
-        
-        // Handle personal_information
-        if (parsedData.personal_information) {
-          resumeData.personal_information = typeof parsedData.personal_information === 'object' 
-            ? parsedData.personal_information 
-            : JSON.parse(parsedData.personal_information);
-        }
-        
-        // Add preferred locations
-        if (Array.isArray(parsedData.preferred_locations)) {
-          resumeData.preferred_locations = parsedData.preferred_locations;
-        }
+        // Add all available fields from the parsed data
+        Object.keys(parsedData).forEach(key => {
+          if (key === 'resume_text') return; // Skip resume_text as we already have it
           
-        // Add preferred companies
-        if (Array.isArray(parsedData.preferred_companies)) {
-          resumeData.preferred_companies = parsedData.preferred_companies;
-        }
-        
-        // Add salary ranges  
-        resumeData.min_salary = parsedData.min_salary || null;
-        resumeData.max_salary = parsedData.max_salary || null;
-        
-        // Add work preferences
-        resumeData.preferred_work_type = parsedData.preferred_work_type || null;
-        resumeData.years_of_experience = parsedData.years_of_experience || null;
-        
-        // Add possible job titles
-        if (Array.isArray(parsedData.possible_job_titles)) {
-          resumeData.possible_job_titles = parsedData.possible_job_titles;
-        }
+          const value = parsedData[key];
           
-        // Add summary
-        if (parsedData.summary) {
-          resumeData.summary = parsedData.summary;
-        }
+          // Handle objects that need to be stringified
+          if (typeof value === 'object' && value !== null && 
+              key !== 'extracted_skills' && 
+              key !== 'preferred_locations' && key !== 'preferred_companies' && 
+              key !== 'possible_job_titles') {
+            resumeData[key] = JSON.stringify(value);
+          } else {
+            resumeData[key] = value;
+          }
+        });
+        
+        console.log("[ResumeUpload] Parsed data keys being added:", Object.keys(parsedData));
       }
-      
-      console.log("Resume data to be inserted:", JSON.stringify({
-        ...resumeData,
-        resume_text: `${resumeData.resume_text.substring(0, 100)}... (truncated)`
-      }, null, 2));
 
-      const { error: insertError, data: insertedResume } = await supabase
-        .from("resumes")
-        .insert(resumeData)
-        .select()
-        .single();
+      try {
+        console.log("[ResumeUpload] Inserting resume with data:", {
+          ...resumeData,
+          resume_text: `${resumeData.resume_text?.substring(0, 100)}... (truncated)`
+        });
         
-      if (insertError) {
-        console.error("Database insert failed:", insertError);
-        console.error("Attempting to clean up storage...");
-        await supabase.storage.from("resumes").remove([filePath]);
+        // Direct supabase insert for debugging
+        console.log("[ResumeUpload] BEFORE DB INSERT: Executing direct DB insert...");
+        const { data: directData, error: directError } = await supabase
+          .from("resumes")
+          .insert(resumeData)
+          .select();
+        
+        console.log("[ResumeUpload] AFTER DB INSERT: Insert completed");
+        
+        if (directError) {
+          console.error("[ResumeUpload] Direct DB insert failed:", directError);
+          throw new Error(`Database insert error: ${directError.message}`);
+        }
+        
+        console.log("[ResumeUpload] Direct DB insert succeeded:", directData);
+        
+        toast({
+          title: "Resume uploaded successfully",
+          description: parsedData 
+            ? "Your resume has been processed and saved."
+            : "Your resume has been saved with basic text extraction.",
+        });
+        
+        setUploadProgress(100);
+        return true;
+      } catch (insertError) {
+        console.error("[ResumeUpload] Database insert failed:", insertError);
+        if (filePath) {
+          console.error("[ResumeUpload] Attempting to clean up storage...");
+          try {
+            await deleteFile(filePath);
+          } catch (cleanupError) {
+            console.error("[ResumeUpload] Storage cleanup failed:", cleanupError);
+          }
+        }
         throw insertError;
       }
-
-      console.log("Resume upload process completed successfully");
-      console.log("Inserted resume data:", insertedResume);
-      
-      toast({
-        title: "Resume uploaded successfully",
-        description: parsedData 
-          ? "Your resume has been processed and saved."
-          : "Your resume has been saved with basic text extraction.",
-      });
-      
-      return true;
     } catch (error) {
-      console.error("Upload process error:", error);
-      console.error("Error details:", error instanceof Error ? {
+      console.error("[ResumeUpload] Upload process error:", error);
+      console.error("[ResumeUpload] Error details:", error instanceof Error ? {
         name: error.name,
         message: error.message,
         stack: error.stack
@@ -379,8 +292,9 @@ export const useResumeUpload = (
       return false;
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
-  return { isUploading, uploadResume };
+  return { isUploading, uploadProgress, uploadResume };
 };
