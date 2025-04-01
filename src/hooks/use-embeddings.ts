@@ -1,5 +1,6 @@
 
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 export interface EmbeddingResponse {
   success: boolean;
@@ -17,6 +18,7 @@ export const useEmbeddings = () => {
    */
   const testEmbeddingFunction = async (): Promise<boolean> => {
     try {
+      console.log("Testing embedding function...");
       const { data, error } = await supabase.functions.invoke("generate-embeddings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -28,6 +30,7 @@ export const useEmbeddings = () => {
         return false;
       }
       
+      console.log("[Embeddings] Function test response:", data);
       return data?.success === true;
     } catch (error) {
       console.error("[Embeddings] Failed to test function:", error);
@@ -55,6 +58,8 @@ export const useEmbeddings = () => {
         return null;
       }
       
+      console.log("[Embeddings] Generating embeddings for", validTexts.length, "texts");
+      
       // Invoke the edge function
       const { data, error } = await supabase.functions.invoke("generate-embeddings", {
         method: "POST",
@@ -63,11 +68,15 @@ export const useEmbeddings = () => {
       });
       
       if (error) {
+        console.error("[Embeddings] Function invocation error:", error);
         throw error;
       }
       
+      console.log("[Embeddings] Function response:", data);
+      
       if (!data?.success || !data.embeddings) {
         const errorMsg = data?.error || "Failed to generate embeddings";
+        console.error("[Embeddings] Error in response:", errorMsg);
         throw new Error(errorMsg);
       }
       
@@ -88,6 +97,8 @@ export const useEmbeddings = () => {
       console.error("[Embeddings] Empty text provided");
       return null;
     }
+    
+    console.log("[Embeddings] Generating single embedding for text:", text.substring(0, 50) + (text.length > 50 ? "..." : ""));
     
     const embeddings = await generateEmbeddings([text]);
     return embeddings ? embeddings[0] : null;

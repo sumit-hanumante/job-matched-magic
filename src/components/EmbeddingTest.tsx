@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useEmbeddings } from "@/hooks/use-embeddings";
 import { AlertCircle, CheckCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const EmbeddingTest = () => {
   const [testText, setTestText] = useState<string>("This is a sample text to test the embedding functionality.");
@@ -14,6 +15,7 @@ const EmbeddingTest = () => {
   const [error, setError] = useState<string | null>(null);
   const [functionStatus, setFunctionStatus] = useState<boolean | null>(null);
   const [statusChecking, setStatusChecking] = useState<boolean>(false);
+  const { toast } = useToast();
 
   const { testEmbeddingFunction, generateSingleEmbedding } = useEmbeddings();
 
@@ -23,9 +25,27 @@ const EmbeddingTest = () => {
     try {
       const status = await testEmbeddingFunction();
       setFunctionStatus(status);
+      if (status) {
+        toast({
+          title: "Success",
+          description: "The embedding function is working properly",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "The embedding function is not accessible",
+          variant: "destructive",
+        });
+      }
     } catch (err) {
       setError("Error checking function status: " + (err instanceof Error ? err.message : String(err)));
       setFunctionStatus(false);
+      toast({
+        title: "Error",
+        description: "Failed to check embedding function status",
+        variant: "destructive",
+      });
     } finally {
       setStatusChecking(false);
     }
@@ -53,8 +73,21 @@ const EmbeddingTest = () => {
         dimensions: embedding.length,
         sample: embedding.slice(0, 5).map(num => num.toFixed(6))
       });
+      
+      toast({
+        title: "Success",
+        description: `Generated embedding with ${embedding.length} dimensions`,
+        variant: "default",
+      });
     } catch (err) {
-      setError("Error generating embedding: " + (err instanceof Error ? err.message : String(err)));
+      const errorMessage = "Error generating embedding: " + (err instanceof Error ? err.message : String(err));
+      setError(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      console.error(errorMessage, err);
     } finally {
       setIsLoading(false);
     }

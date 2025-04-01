@@ -76,15 +76,15 @@ serve(async (req) => {
   const startTime = Date.now();
   
   try {
-    // Parse the request body
-    const requestClone = req.clone();
-    const requestText = await requestClone.text();
+    // Fix: Properly clone the request and read its body as text
+    const body = await req.text();
     
-    if (requestText.length === 0) {
+    if (!body || body.trim() === '') {
       throw new Error("Empty request body");
     }
     
-    const parsedBody: EmbeddingRequest = JSON.parse(requestText);
+    // Parse the request body
+    const parsedBody: EmbeddingRequest = JSON.parse(body);
     const { texts, test } = parsedBody;
     
     // Handle test requests
@@ -94,7 +94,7 @@ serve(async (req) => {
           success: true,
           message: "Embedding function is working properly"
         }),
-        { headers: corsHeaders }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -111,7 +111,7 @@ serve(async (req) => {
           success: false,
           error: "GEMINI_API_KEY is not configured",
         }),
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -128,7 +128,7 @@ serve(async (req) => {
     
     return new Response(
       JSON.stringify(response),
-      { headers: corsHeaders }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -137,7 +137,7 @@ serve(async (req) => {
         success: false,
         error: error.message || "Failed to generate embeddings"
       }),
-      { status: 400, headers: corsHeaders }
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
