@@ -88,7 +88,7 @@ serve(async (req) => {
     
     // 2. Get the API key and validate it
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-
+    
     // DETAILED DEBUG: Environment checks
     console.log("Environment diagnostic information:");
     console.log("Environment object type:", typeof Deno.env);

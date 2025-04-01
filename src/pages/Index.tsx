@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import Auth from "@/components/Auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { toast } from "@/hooks/use-toast";
 
 // Lazy load components
 const ResumeUpload = lazy(() => import("@/components/ResumeUpload"));
@@ -94,7 +95,13 @@ const Index = () => {
               <DialogTitle>Sign in to continue</DialogTitle>
             </DialogHeader>
             <Auth 
-              onSuccess={() => setShowAuthDialog(false)}
+              onSuccess={() => {
+                setShowAuthDialog(false);
+                toast({
+                  title: "Signed in successfully",
+                  description: "You can now upload your resume and get job matches."
+                });
+              }}
               defaultEmail={prefilledEmail}
               defaultName={prefilledName}
             />

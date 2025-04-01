@@ -1,7 +1,6 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { supabase } from "@/lib/supabase";
 import ResumeDisplay from "./resume/ResumeDisplay";
 import ResumeDropzone from "./resume/ResumeDropzone";
 import ResumeUploadForm from "./resume/ResumeUploadForm";
@@ -9,7 +8,7 @@ import { useResumeUpload } from "@/hooks/use-resume-upload";
 import { fetchCurrentResume, cleanupAllResumes } from "@/lib/resume-utils";
 import { useJobMatching } from '@/hooks/use-job-matching';
 import { Button } from "@/components/ui/button";
-import { Trash2, AlertCircle, FileText } from "lucide-react";
+import { Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -22,8 +21,6 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<string>("");
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [currentResume, setCurrentResume] = useState<{
     filename?: string;
@@ -35,35 +32,10 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
   } | null>(null);
   
   const { user } = useAuth();
-  const { isUploading, uploadResume } = useResumeUpload(user, onLoginRequired);
+  const { isUploading, uploadProgress, uploadResume } = useResumeUpload(user, onLoginRequired);
   const { isProcessing, generateJobMatches } = useJobMatching();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-
-  // Check if GEMINI_API_KEY is configured
-  useEffect(() => {
-    const checkGeminiConfig = async () => {
-      if (user) {
-        try {
-          const { data, error } = await supabase.functions.invoke("parse-resume", {
-            method: "POST",
-            body: JSON.stringify({ test: true }),
-            headers: { "Content-Type": "application/json" },
-          });
-          
-          if (error) {
-            console.error("Error testing Gemini configuration:", error);
-          } else {
-            console.log("Gemini configuration test response:", data);
-          }
-        } catch (err) {
-          console.error("Failed to test Gemini configuration:", err);
-        }
-      }
-    };
-    
-    checkGeminiConfig();
-  }, [user]);
 
   // Load the current resume when the component mounts or when the user changes
   useEffect(() => {
@@ -79,85 +51,15 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     }
   }, [file, isUploading]);
 
-  // Simulate upload progress
-  useEffect(() => {
-    let intervalId: number;
-    
-    if (isUploading) {
-      setUploadProgress(0);
-      intervalId = window.setInterval(() => {
-        setUploadProgress(prev => {
-          // Go up to 90%, the last 10% is for server processing
-          if (prev >= 90) return prev;
-          return prev + Math.random() * 15;
-        });
-      }, 500);
-    } else if (uploadProgress > 0) {
-      // Set to 100% when done
-      setUploadProgress(100);
-      
-      // Reset after showing complete
-      const timeout = setTimeout(() => {
-        setUploadProgress(0);
-      }, 1500);
-      
-      return () => clearTimeout(timeout);
-    }
-    
-    return () => {
-      if (intervalId) window.clearInterval(intervalId);
-    };
-  }, [isUploading, uploadProgress]);
-
-  // Listen for console logs to update the status
-  useEffect(() => {
-    if (isUploading) {
-      const originalConsoleLog = console.log;
-      const originalConsoleError = console.error;
-      
-      console.log = (...args) => {
-        originalConsoleLog(...args);
-        const message = args.map(arg => 
-          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-        ).join(' ');
-        
-        setUploadStatus(prev => prev + message + "\n");
-      };
-      
-      console.error = (...args) => {
-        originalConsoleError(...args);
-        const message = args.map(arg => 
-          typeof arg === 'object' && arg instanceof Error
-            ? `${arg.name}: ${arg.message}`
-            : typeof arg === 'object' 
-              ? JSON.stringify(arg, null, 2) 
-              : String(arg)
-        ).join(' ');
-        
-        setUploadStatus(prev => prev + "ERROR: " + message + "\n");
-        
-        // Extract error for UI display
-        if (args[0] === "Upload process error:" && args[1]) {
-          setErrorDetails(typeof args[1] === 'object' 
-            ? (args[1].message || JSON.stringify(args[1])) 
-            : String(args[1]));
-        }
-      };
-      
-      return () => {
-        console.log = originalConsoleLog;
-        console.error = originalConsoleError;
-      };
-    }
-  }, [isUploading]);
-
   const loadCurrentResume = async () => {
     if (user) {
       try {
+        console.log("[ResumeUpload] Loading current resume for user:", user.id);
         const resume = await fetchCurrentResume(user.id);
+        console.log("[ResumeUpload] Current resume loaded:", resume);
         setCurrentResume(resume);
       } catch (error) {
-        console.error("Failed to load current resume:", error);
+        console.error("[ResumeUpload] Failed to load current resume:", error);
         toast({
           variant: "destructive",
           title: "Failed to load resume",
@@ -212,11 +114,13 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     if (!file) return;
     
     // Reset status and errors
-    setUploadStatus("");
     setErrorDetails(null);
     
+    console.log("[ResumeUpload] Starting upload for file:", file.name);
     const success = await uploadResume(file);
+    
     if (success) {
+      console.log("[ResumeUpload] Upload successful, resetting file input");
       setFile(null);
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
@@ -227,13 +131,18 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       });
       
       // Reload the current resume after successful upload
+      console.log("[ResumeUpload] Reloading current resume");
       await loadCurrentResume();
       
       // Generate job matches if we have a resume ID
+      console.log("[ResumeUpload] Checking for resume ID to generate matches");
       const updatedResume = await fetchCurrentResume(user?.id || '');
       if (updatedResume?.id) {
+        console.log("[ResumeUpload] Generating job matches for resume:", updatedResume.id);
         generateJobMatches(updatedResume.id);
       }
+    } else {
+      console.log("[ResumeUpload] Upload failed");
     }
   };
 
@@ -242,6 +151,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
     
     setIsCleaningUp(true);
     try {
+      console.log("[ResumeUpload] Cleaning up all resumes for user:", user.id);
       const success = await cleanupAllResumes(user.id);
       if (success) {
         toast({
@@ -269,7 +179,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
 
   return (
     <div className="w-full">
-      {isUploading && (
+      {isUploading && uploadProgress > 0 && (
         <div className="mb-4 space-y-2 animate-fade-in">
           <div className="flex justify-between items-center text-sm text-slate-600 mb-1">
             <span>Uploading resume...</span>
@@ -281,7 +191,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
       
       {errorDetails && !isUploading && (
         <div className="p-4 mb-4 border border-red-200 bg-red-50 rounded-lg text-red-700 text-sm flex items-start gap-3 animate-slide-up">
-          <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <FileText className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
           <div>
             <h4 className="font-medium mb-1">Upload failed</h4>
             <p className="text-sm">{errorDetails}</p>
@@ -337,7 +247,7 @@ const ResumeUpload = ({ onLoginRequired }: ResumeUploadProps) => {
           onUpload={handleUpload}
           onCancel={() => setFile(null)}
           isAuthenticated={!!user}
-          uploadStatus={uploadStatus}
+          uploadStatus=""
         />
       )}
     </div>
