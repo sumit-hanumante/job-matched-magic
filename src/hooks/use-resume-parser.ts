@@ -47,8 +47,6 @@ export const useResumeParser = () => {
       console.log("[ResumeParser] Payload sample:", payload.resumeText.substring(0, 100) + '...');
 
       // Invoke the edge function
-      // Note: supabase.functions.invoke handles JSON stringification internally,
-      // so we just pass the JavaScript object directly in the body
       console.log("[ResumeParser] Invoking edge function with properly formatted payload");
       
       const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
