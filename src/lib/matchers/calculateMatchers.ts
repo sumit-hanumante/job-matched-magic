@@ -1,5 +1,11 @@
 
-import { Job, Resume } from "@/lib/types";
+// Add console.log at the top of this file to see when it's loaded
+console.log("Loading calculateMatchers.ts module");
+
+import { type Job, type Resume } from "@/lib/types";
+
+// Remove the type logging that was causing issues
+console.log("Starting skill match calculation functions");
 
 /**
  * Calculate skill match score between resume skills and job description/requirements
@@ -86,8 +92,12 @@ export function calculateCompanyMatchScore(
 export function calculateSalaryMatchScore(
   minSalary?: number, 
   maxSalary?: number, 
-  job?: Job
+  job?: {
+    salaryRange?: string;
+    [key: string]: any;
+  }
 ): number {
+  console.log("calculateSalaryMatchScore called with:", { minSalary, maxSalary, jobSalaryRange: job?.salaryRange });
   if (!minSalary || !job?.salaryRange) return 0.5; // Neutral score if no salary info
   
   // Try to extract numbers from salary range string
@@ -97,6 +107,7 @@ export function calculateSalaryMatchScore(
   try {
     // Extract numbers from strings like "$50,000 - $80,000"
     const numbers = job.salaryRange.match(/\d[\d,\.]*\d|\d/g);
+    console.log("Extracted numbers from salaryRange:", numbers);
     if (numbers && numbers.length >= 2) {
       jobMinSalary = parseInt(numbers[0].replace(/[^\d]/g, ''));
       jobMaxSalary = parseInt(numbers[1].replace(/[^\d]/g, ''));
@@ -131,7 +142,12 @@ export function calculateSalaryMatchScore(
  * @param job The job to match against
  * @returns A number between 0-100 representing the match percentage
  */
-export function calculateMatchScore(resume: Resume, job: Job): number {
+export function calculateMatchScore(
+  resume: Resume, 
+  job: Job
+): number {
+  console.log("calculateMatchScore called with resume and job objects");
+  
   // Default weights for different matching aspects
   const weights = {
     skills: 0.5,      // 50% weight to skills match

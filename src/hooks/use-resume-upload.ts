@@ -6,7 +6,6 @@ import { shiftResumes } from "@/lib/resume-utils";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Dynamically determine the proper worker URL based on the PDF.js version
-// This approach prevents version mismatches between the API and worker
 const pdfVersion = pdfjsLib.version || "2.16.105";
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfVersion}/pdf.worker.min.js`;
 
@@ -46,9 +45,9 @@ export const useResumeUpload = (
       return fullText.trim();
     } catch (error) {
       console.error("Error extracting PDF text:", error);
-      console.error("Error name:", error.name);
-      console.error("Error message:", error.message);
-      console.error("Error stack:", error.stack);
+      console.error("Error name:", error instanceof Error ? error.name : "Unknown");
+      console.error("Error message:", error instanceof Error ? error.message : String(error));
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
       throw new Error(`PDF extraction failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
@@ -210,10 +209,12 @@ export const useResumeUpload = (
       try {
         console.log("Calling edge function with text length:", extractedText.length);
         
+        // Send the request to the edge function with the resumeText directly
+        console.log("Sending request with body:", { resumeText: extractedText.substring(0, 100) + "..." });
+        
         const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
           method: "POST",
-          body: JSON.stringify({ resumeText: extractedText }),
-          headers: { "Content-Type": "application/json" }
+          body: { resumeText: extractedText }
         });
         
         if (parseError) {
@@ -240,6 +241,7 @@ export const useResumeUpload = (
           parsedData = responseData.data;
           console.log("Extracted skills from API:", parsedData.extracted_skills?.length || 0);
           console.log("First few skills:", parsedData.extracted_skills?.slice(0, 5));
+          console.log("Experience data:", typeof parsedData.experience);
         } else {
           console.warn("No data returned from parse function");
         }
@@ -255,35 +257,86 @@ export const useResumeUpload = (
       // 6. Insert the resume record into the database
       console.log("Step 6: Inserting resume record into database...");
       
-      const resumeData = {
+      // Define the base resume data object with required fields
+      const resumeData: Record<string, any> = {
         user_id: user.id,
         file_name: file.name,
         file_path: filePath,
         content_type: file.type,
         status: parsedData ? "processed" : "uploaded",
         order_index: 1,
-        resume_text: extractedText, // Store the full extracted text
+        resume_text: extractedText,
       };
 
-      // Add parsed fields if available
+      // Add parsed fields if available - Only if they exist in the database schema
       if (parsedData) {
-        Object.assign(resumeData, {
-          extracted_skills: parsedData.extracted_skills || [],
-          experience: parsedData.experience || "",
-          preferred_locations: parsedData.preferred_locations || [],
-          preferred_companies: parsedData.preferred_companies || [],
-          min_salary: parsedData.min_salary || null,
-          max_salary: parsedData.max_salary || null,
-          preferred_work_type: parsedData.preferred_work_type || null,
-          years_of_experience: parsedData.years_of_experience || null,
-          possible_job_titles: parsedData.possible_job_titles || []
-        });
+        console.log("Adding parsed data to resume record");
+        
+        // Handle skills
+        if (Array.isArray(parsedData.extracted_skills)) {
+          resumeData.extracted_skills = parsedData.extracted_skills;
+        }
+        
+        // Handle experience
+        if (parsedData.experience) {
+          resumeData.experience = typeof parsedData.experience === 'object' 
+            ? JSON.stringify(parsedData.experience) 
+            : parsedData.experience;
+        }
+        
+        // Handle education
+        if (parsedData.education) {
+          resumeData.education = typeof parsedData.education === 'object' 
+            ? JSON.stringify(parsedData.education) 
+            : parsedData.education;
+        }
+        
+        // Handle projects
+        if (parsedData.projects) {
+          resumeData.projects = typeof parsedData.projects === 'object' 
+            ? JSON.stringify(parsedData.projects) 
+            : parsedData.projects;
+        }
+        
+        // Handle personal_information
+        if (parsedData.personal_information) {
+          resumeData.personal_information = typeof parsedData.personal_information === 'object' 
+            ? parsedData.personal_information 
+            : JSON.parse(parsedData.personal_information);
+        }
+        
+        // Add preferred locations
+        if (Array.isArray(parsedData.preferred_locations)) {
+          resumeData.preferred_locations = parsedData.preferred_locations;
+        }
+          
+        // Add preferred companies
+        if (Array.isArray(parsedData.preferred_companies)) {
+          resumeData.preferred_companies = parsedData.preferred_companies;
+        }
+        
+        // Add salary ranges  
+        resumeData.min_salary = parsedData.min_salary || null;
+        resumeData.max_salary = parsedData.max_salary || null;
+        
+        // Add work preferences
+        resumeData.preferred_work_type = parsedData.preferred_work_type || null;
+        resumeData.years_of_experience = parsedData.years_of_experience || null;
+        
+        // Add possible job titles
+        if (Array.isArray(parsedData.possible_job_titles)) {
+          resumeData.possible_job_titles = parsedData.possible_job_titles;
+        }
+          
+        // Add summary
+        if (parsedData.summary) {
+          resumeData.summary = parsedData.summary;
+        }
       }
       
       console.log("Resume data to be inserted:", JSON.stringify({
         ...resumeData,
-        resume_text: `${extractedText.substring(0, 100)}... (truncated)`,
-        extracted_skills: resumeData.extracted_skills || []
+        resume_text: `${resumeData.resume_text.substring(0, 100)}... (truncated)`
       }, null, 2));
 
       const { error: insertError, data: insertedResume } = await supabase
