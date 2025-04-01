@@ -24,9 +24,29 @@ serve(async (req) => {
     // 1. Parse the request body
     let parsedBody;
     try {
-      // First try to get the body as already parsed from Supabase client
-      parsedBody = await req.json();
-      console.log("Request body parsed successfully");
+      // Parse body as JSON - try different ways based on how it was sent
+      try {
+        // First try parsing directly - works if body was sent as object
+        parsedBody = await req.json();
+        console.log("Request body parsed successfully as direct JSON");
+      } catch (directParseError) {
+        // If direct parsing failed, read as text and then parse
+        const rawText = await req.text();
+        console.log("Raw body length:", rawText.length);
+        
+        if (rawText.length === 0) {
+          throw new Error("Request body is empty");
+        }
+        
+        try {
+          parsedBody = JSON.parse(rawText);
+          console.log("Parsed JSON from raw text successfully");
+        } catch (textParseError) {
+          console.error("Failed to parse raw text as JSON:", textParseError);
+          throw new Error("Invalid JSON in request body");
+        }
+      }
+      
       console.log("Body keys:", Object.keys(parsedBody));
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
@@ -173,7 +193,6 @@ serve(async (req) => {
       
       // 6. Format the data with defaults if fields are missing
       // Only include fields that exist in the database schema
-      // NOTE: We've removed 'education' and 'projects' fields as they're not in the database schema
       const formattedData = {
         personal_information: parsedData.personal_information || {},
         summary: parsedData.summary || "",
