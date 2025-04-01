@@ -89,17 +89,41 @@ serve(async (req) => {
     // 2. Get the API key and validate it
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
 
-    // Debug: Check API key existence
+    // DETAILED DEBUG: Environment checks
+    console.log("Environment diagnostic information:");
+    console.log("Environment object type:", typeof Deno.env);
+    console.log("Available environment methods:", Object.getOwnPropertyNames(Deno.env));
+    
+    try {
+      const envKeys = Object.keys(Deno.env.toObject());
+      console.log("All environment variables:", envKeys);
+      console.log("Total environment variables:", envKeys.length);
+      
+      // Check for similar keys (case insensitive)
+      const similarKeys = envKeys.filter(key => 
+        key.toLowerCase().includes('gemini') || 
+        key.toLowerCase().includes('api') || 
+        key.toLowerCase().includes('key')
+      );
+      if (similarKeys.length > 0) {
+        console.log("Found similar environment keys:", similarKeys);
+      }
+    } catch (envError) {
+      console.error("Error accessing environment variables:", envError);
+    }
+    
+    // Check API key existence
     console.log("GEMINI_API_KEY check in index.ts:");
     if (!geminiApiKey) {
       console.error("CRITICAL ERROR: GEMINI_API_KEY environment variable is missing or empty!");
-      console.log("Environment variables available:", Object.keys(Deno.env.toObject()));
     } else {
       console.log(`GEMINI_API_KEY exists with length: ${geminiApiKey.length}`);
+      console.log(`GEMINI_API_KEY first 4 chars: ${geminiApiKey.substring(0, 4)}...`);
+      console.log(`GEMINI_API_KEY last 4 chars: ...${geminiApiKey.substring(geminiApiKey.length - 4)}`);
     }
     
     if (!geminiApiKey) {
-      console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
+      console.error("GEMINI_API_KEY is not configured. Please check Supabase Edge Function Secrets.");
       const errorResponse = {
         success: false,
         error: "GEMINI_API_KEY is not configured. Please contact the administrator.",
