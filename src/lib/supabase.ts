@@ -24,96 +24,48 @@ export const initializeStorage = async () => {
   try {
     console.log('Checking storage buckets...');
     
-    // Check and create resumes bucket
+    // Try to create resumes bucket
     try {
-      console.log('Checking if resumes bucket exists...');
-      const { data: resumesBucket, error: resumesError } = await supabase.storage.getBucket('resumes');
+      console.log('Creating resumes bucket...');
+      const { data: resumesBucket, error: createError } = await supabase.storage.createBucket('resumes', {
+        public: false,
+        fileSizeLimit: 10485760 // 10MB
+      });
       
-      if (resumesError) {
-        if (resumesError.message && resumesError.message.includes('does not exist')) {
-          console.log('Creating resumes bucket...');
-          const { data: createData, error: createError } = await supabase.storage.createBucket('resumes', {
-            public: false,
-            fileSizeLimit: 10485760 // 10MB
-          });
-          
-          if (createError) {
-            console.error('Failed to create resumes bucket:', createError);
-            throw createError;
-          }
-          console.log('Successfully created resumes bucket:', createData);
+      if (createError) {
+        // Ignore error if bucket already exists
+        if (!createError.message.includes('already exists')) {
+          console.error('Failed to create resumes bucket:', createError);
         } else {
-          console.error('Error checking resumes bucket:', resumesError);
-          throw resumesError;
+          console.log('Resumes bucket already exists');
         }
       } else {
-        console.log('Resumes bucket exists:', resumesBucket);
+        console.log('Successfully created resumes bucket:', resumesBucket);
       }
-    } catch (error: any) {
-      // Handle error cases carefully
-      if (error.message && error.message.includes('does not exist')) {
-        console.log('Creating resumes bucket (caught in catch block)...');
-        try {
-          const { data, error: createError } = await supabase.storage.createBucket('resumes', {
-            public: false,
-            fileSizeLimit: 10485760 // 10MB
-          });
-          
-          if (createError) throw createError;
-          console.log('Successfully created resumes bucket in catch block:', data);
-        } catch (createError) {
-          console.error('Failed to create resumes bucket in catch block:', createError);
-          // Continue to next bucket even if this one fails
-        }
-      } else {
-        console.error('Unexpected error with resumes bucket:', error);
-        // Continue to next bucket
-      }
+    } catch (error) {
+      console.error('Error creating resumes bucket:', error);
     }
     
-    // Check and create temp-resumes bucket
+    // Try to create temp-resumes bucket
     try {
-      console.log('Checking if temp-resumes bucket exists...');
-      const { data: tempBucket, error: tempError } = await supabase.storage.getBucket('temp-resumes');
+      console.log('Creating temp-resumes bucket...');
+      const { data: tempBucket, error: createError } = await supabase.storage.createBucket('temp-resumes', {
+        public: true,
+        fileSizeLimit: 10485760 // 10MB
+      });
       
-      if (tempError) {
-        if (tempError.message && tempError.message.includes('does not exist')) {
-          console.log('Creating temp-resumes bucket...');
-          const { data: createData, error: createError } = await supabase.storage.createBucket('temp-resumes', {
-            public: true,
-            fileSizeLimit: 10485760 // 10MB
-          });
-          
-          if (createError) {
-            console.error('Failed to create temp-resumes bucket:', createError);
-            throw createError;
-          }
-          console.log('Successfully created temp-resumes bucket:', createData);
+      if (createError) {
+        // Ignore error if bucket already exists
+        if (!createError.message.includes('already exists')) {
+          console.error('Failed to create temp-resumes bucket:', createError);
         } else {
-          console.error('Error checking temp-resumes bucket:', tempError);
-          throw tempError;
+          console.log('Temp-resumes bucket already exists');
         }
       } else {
-        console.log('Temp-resumes bucket exists:', tempBucket);
+        console.log('Successfully created temp-resumes bucket:', tempBucket);
       }
-    } catch (error: any) {
-      // Handle error cases carefully
-      if (error.message && error.message.includes('does not exist')) {
-        console.log('Creating temp-resumes bucket (caught in catch block)...');
-        try {
-          const { data, error: createError } = await supabase.storage.createBucket('temp-resumes', {
-            public: true,
-            fileSizeLimit: 10485760 // 10MB
-          });
-          
-          if (createError) throw createError;
-          console.log('Successfully created temp-resumes bucket in catch block:', data);
-        } catch (createError) {
-          console.error('Failed to create temp-resumes bucket in catch block:', createError);
-        }
-      } else {
-        console.error('Unexpected error with temp-resumes bucket:', error);
-      }
+    } catch (error) {
+      console.error('Error creating temp-resumes bucket:', error);
     }
     
     console.log('Storage buckets initialized successfully');
