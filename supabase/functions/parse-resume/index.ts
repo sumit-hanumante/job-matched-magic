@@ -24,29 +24,9 @@ serve(async (req) => {
     // 1. Parse the request body
     let parsedBody;
     try {
-      // Parse body as JSON - try different ways based on how it was sent
-      try {
-        // First try parsing directly - works if body was sent as object
-        parsedBody = await req.json();
-        console.log("Request body parsed successfully as direct JSON");
-      } catch (directParseError) {
-        // If direct parsing failed, read as text and then parse
-        const rawText = await req.text();
-        console.log("Raw body length:", rawText.length);
-        
-        if (rawText.length === 0) {
-          throw new Error("Request body is empty");
-        }
-        
-        try {
-          parsedBody = JSON.parse(rawText);
-          console.log("Parsed JSON from raw text successfully");
-        } catch (textParseError) {
-          console.error("Failed to parse raw text as JSON:", textParseError);
-          throw new Error("Invalid JSON in request body");
-        }
-      }
-      
+      // First try to get the body as already parsed from Supabase client
+      parsedBody = await req.json();
+      console.log("Request body parsed successfully");
       console.log("Body keys:", Object.keys(parsedBody));
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
@@ -89,7 +69,7 @@ serve(async (req) => {
     
     console.log("GEMINI_API_KEY found with length:", geminiApiKey.length);
     
-    // 3. Build the prompt for resume parsing - 20% shorter but keeping all essential parts
+    // 3. Build the prompt for resume parsing - aligned with our database schema
     const prompt = `
       Analyze this resume and extract details in JSON format optimized for job matching:
       
@@ -98,6 +78,8 @@ serve(async (req) => {
       - summary (brief candidate overview)
       - extracted_skills (array of technical skills, soft skills, tools)
       - experience (work history with company, role, dates, responsibilities)
+      - education (degrees, institutions, dates)
+      - projects (name, description, tech stack used)
       - preferred_locations (array of locations preferred)
       - preferred_companies (array of company names the candidate has mentioned interest in)
       - min_salary (minimum salary as number without currency symbols)
@@ -192,12 +174,13 @@ serve(async (req) => {
       }
       
       // 6. Format the data with defaults if fields are missing
-      // Only include fields that exist in the database schema
+      // Based on our updated Supabase database schema for the 'resumes' table
       const formattedData = {
-        personal_information: parsedData.personal_information || {},
         summary: parsedData.summary || "",
         extracted_skills: Array.isArray(parsedData.extracted_skills) ? parsedData.extracted_skills : [],
         experience: parsedData.experience || "",
+        education: parsedData.education || "",
+        projects: parsedData.projects || "",
         preferred_locations: Array.isArray(parsedData.preferred_locations) ? parsedData.preferred_locations : [],
         preferred_companies: Array.isArray(parsedData.preferred_companies) ? parsedData.preferred_companies : [],
         min_salary: parsedData.min_salary || null,
@@ -205,6 +188,7 @@ serve(async (req) => {
         preferred_work_type: parsedData.preferred_work_type || null,
         years_of_experience: parsedData.years_of_experience || null,
         possible_job_titles: Array.isArray(parsedData.possible_job_titles) ? parsedData.possible_job_titles : [],
+        personal_information: parsedData.personal_information || {},
         resume_text: resumeText
       };
       
