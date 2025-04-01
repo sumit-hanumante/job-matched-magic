@@ -10,6 +10,7 @@ export const useResumeParser = () => {
       
       const { data, error } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: { test: true }
       });
       
@@ -44,6 +45,7 @@ export const useResumeParser = () => {
       
       const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: requestPayload
       });
       

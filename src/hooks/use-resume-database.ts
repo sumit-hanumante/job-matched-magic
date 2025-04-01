@@ -29,15 +29,14 @@ export const useResumeDatabase = () => {
       console.log("Shifting resumes for user:", userId);
       
       // Delete resumes that would be pushed beyond index 3
-      const { error: deleteError, count } = await supabase
+      const { error: deleteError } = await supabase
         .from("resumes")
         .delete()
         .eq("user_id", userId)
-        .gte("order_index", 3)
-        .select("count");
+        .gte("order_index", 3);
       
       if (deleteError) throw deleteError;
-      console.log(`Successfully deleted ${count || 0} resumes with order_index ≥ 3`);
+      console.log("Successfully deleted resumes with order_index ≥ 3");
       
       // Get existing resumes that need to be shifted
       const { data: existingResumes, error: fetchError } = await supabase

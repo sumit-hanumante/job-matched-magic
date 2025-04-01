@@ -24,7 +24,8 @@ serve(async (req) => {
     let parsedBody: ResumeParseRequest;
     try {
       const requestText = await req.text();
-      console.log("Raw request body:", requestText.substring(0, 100) + (requestText.length > 100 ? "..." : ""));
+      console.log("Raw request body length:", requestText.length);
+      console.log("Request body preview (first 200 chars):", requestText.substring(0, 200));
       
       if (!requestText || requestText.trim() === "") {
         throw new Error("Empty request body");
