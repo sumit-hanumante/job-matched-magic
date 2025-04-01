@@ -121,7 +121,6 @@ export const useStorageService = () => {
       console.error("Error uploading temporary file:", uploadError);
       console.error("Error details:", {
         message: uploadError.message,
-        statusCode: uploadError.statusCode,
         name: uploadError.name
       });
       throw uploadError;
@@ -154,7 +153,6 @@ export const useStorageService = () => {
       console.error("File upload error:", uploadError);
       console.error("Error details:", {
         message: uploadError.message,
-        statusCode: uploadError.statusCode,
         name: uploadError.name,
         path: filePath
       });

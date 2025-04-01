@@ -46,8 +46,8 @@ export const useResumeParser = () => {
       console.log("Request payload:", JSON.stringify(requestPayload).substring(0, 100) + "...");
       console.log("Request headers:", { "Content-Type": "application/json" });
 
-      // Get function URL for error handling - fixed to use the URL() constructor with string concatenation
-      const functionUrl = new URL('/functions/v1/parse-resume', supabase.supabaseUrl).toString();
+      // Get function URL for error handling - fixed URL construction
+      const functionUrl = new URL('/functions/v1/parse-resume', supabase.supabaseUrl || '').toString();
       console.log("Edge function URL:", functionUrl);
       
       // Using supabase.functions.invoke which handles auth tokens and other details automatically
