@@ -34,37 +34,51 @@ export const useResumeParser = () => {
 
     console.log(`Sending ${resumeText.length} characters of text to parse function`);
     
-    const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
-      method: "POST",
-      body: { resumeText }
-    });
-    
-    if (parseError) {
-      console.error("Edge function error details:", {
-        name: parseError.name,
-        message: parseError.message,
-        code: parseError.code,
-        stack: parseError.stack,
+    try {
+      const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
+        method: "POST",
+        body: { resumeText }
       });
-      throw parseError;
-    }
-    
-    console.log("Edge function response received:", 
-      responseData ? Object.keys(responseData) : "No data");
-    
-    if (!responseData?.success) {
-      const errorMsg = responseData?.error || "Failed to parse resume";
-      console.error("Edge function execution failed:", errorMsg);
-      throw new Error(errorMsg);
-    }
-    
-    console.log("Resume parsed successfully");
-    if (responseData.data) {
-      console.log("Parsed data keys:", Object.keys(responseData.data));
-      return responseData.data;
-    } else {
-      console.warn("No data returned from parse function");
-      return null;
+      
+      if (parseError) {
+        console.error("Edge function error details:", {
+          name: parseError.name,
+          message: parseError.message,
+          code: parseError.code,
+          stack: parseError.stack,
+        });
+        throw parseError;
+      }
+      
+      console.log("Edge function response received:", 
+        responseData ? Object.keys(responseData) : "No data");
+      
+      if (!responseData?.success) {
+        const errorMsg = responseData?.error || "Failed to parse resume";
+        console.error("Edge function execution failed:", errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      console.log("Resume parsed successfully");
+      if (responseData.data) {
+        console.log("Parsed data keys:", Object.keys(responseData.data));
+        return responseData.data;
+      } else {
+        console.warn("No data returned from parse function");
+        return {
+          summary: "",
+          extracted_skills: [],
+          personal_information: {}
+        };
+      }
+    } catch (error) {
+      console.error("Error parsing resume:", error);
+      // Return minimal valid structure instead of throwing
+      return {
+        summary: "Resume parsing failed. Please try again later.",
+        extracted_skills: [],
+        personal_information: {}
+      };
     }
   };
 

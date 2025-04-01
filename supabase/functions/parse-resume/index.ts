@@ -43,13 +43,15 @@ serve(async (req) => {
       );
     }
     
-    if (!resumeText) {
+    if (!resumeText || typeof resumeText !== 'string') {
       console.error("No resumeText provided in request body. Keys found:", Object.keys(parsedBody));
       throw new Error("No resume text provided in the request body");
     }
     
     console.log(`Parsed resumeText length: ${resumeText.length}`);
-    console.log(`resumeText preview: ${resumeText.substring(0, 100)}...`);
+    if (resumeText.length > 0) {
+      console.log(`resumeText preview: ${resumeText.substring(0, 100)}...`);
+    }
     
     // 2. Get the API key and validate it
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
@@ -81,8 +83,8 @@ serve(async (req) => {
       const formattedData = formatParsedData(parsedData, resumeText);
       
       console.log("Successfully formatted data, returning response");
-      console.log("Skills count:", formattedData.extracted_skills.length);
-      if (formattedData.extracted_skills.length > 0) {
+      console.log("Skills count:", formattedData.extracted_skills?.length || 0);
+      if (formattedData.extracted_skills && formattedData.extracted_skills.length > 0) {
         console.log("Sample skills:", formattedData.extracted_skills.slice(0, 5));
       }
       
