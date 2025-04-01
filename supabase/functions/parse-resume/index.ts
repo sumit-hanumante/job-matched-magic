@@ -124,6 +124,12 @@ serve(async (req) => {
         data: formattedData,
         processingTime: Date.now() - startTime
       };
+
+      console.log("Returning success response:", {
+        success: true,
+        processingTime: Date.now() - startTime,
+        dataKeys: Object.keys(formattedData)
+      });
       
       return new Response(
         JSON.stringify(response),
@@ -133,6 +139,12 @@ serve(async (req) => {
     } catch (apiError) {
       console.error("Error calling Gemini API:", apiError);
       console.error("Error details:", apiError.stack || "No stack trace available");
+      
+      console.log("Returning error response:", {
+        success: false,
+        error: apiError.message || "Unknown error",
+        errorType: "AIProcessingError"
+      });
       
       return new Response(
         JSON.stringify({
@@ -146,6 +158,13 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error in parse-resume:", error);
     console.error("Error stack:", error.stack || "No stack trace available");
+    
+    console.log("Returning error response:", {
+      success: false,
+      error: error.message || "Failed to process request",
+      errorType: error.name || "Unknown",
+      processingTime: Date.now() - startTime
+    });
     
     return new Response(
       JSON.stringify({
