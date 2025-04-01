@@ -176,7 +176,6 @@ export type Database = {
         Row: {
           content_type: string | null
           created_at: string | null
-          education: string | null
           embedding: string | null
           experience: string | null
           extracted_skills: string[] | null
@@ -186,22 +185,17 @@ export type Database = {
           max_salary: number | null
           min_salary: number | null
           order_index: number
-          personal_information: Json | null
-          possible_job_titles: string[] | null
           preferred_companies: string[] | null
           preferred_locations: string[] | null
           preferred_work_type: string | null
-          projects: string | null
           resume_text: string | null
+          salary: string | null
           status: string | null
-          summary: string | null
           user_id: string
-          years_of_experience: number | null
         }
         Insert: {
           content_type?: string | null
           created_at?: string | null
-          education?: string | null
           embedding?: string | null
           experience?: string | null
           extracted_skills?: string[] | null
@@ -211,22 +205,17 @@ export type Database = {
           max_salary?: number | null
           min_salary?: number | null
           order_index?: number
-          personal_information?: Json | null
-          possible_job_titles?: string[] | null
           preferred_companies?: string[] | null
           preferred_locations?: string[] | null
           preferred_work_type?: string | null
-          projects?: string | null
           resume_text?: string | null
+          salary?: string | null
           status?: string | null
-          summary?: string | null
           user_id: string
-          years_of_experience?: number | null
         }
         Update: {
           content_type?: string | null
           created_at?: string | null
-          education?: string | null
           embedding?: string | null
           experience?: string | null
           extracted_skills?: string[] | null
@@ -236,17 +225,13 @@ export type Database = {
           max_salary?: number | null
           min_salary?: number | null
           order_index?: number
-          personal_information?: Json | null
-          possible_job_titles?: string[] | null
           preferred_companies?: string[] | null
           preferred_locations?: string[] | null
           preferred_work_type?: string | null
-          projects?: string | null
           resume_text?: string | null
+          salary?: string | null
           status?: string | null
-          summary?: string | null
           user_id?: string
-          years_of_experience?: number | null
         }
         Relationships: []
       }
