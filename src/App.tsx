@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import Profile from "@/pages/Profile";
+import EmbeddingTest from "@/components/EmbeddingTest";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +24,7 @@ const App = () => {
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/test-embeddings" element={<EmbeddingTest />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </main>
