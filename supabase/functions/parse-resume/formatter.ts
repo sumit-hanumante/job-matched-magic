@@ -17,9 +17,9 @@ export function formatParsedData(parsedData: any, resumeText: string): ParsedRes
     console.log("Processing extracted_skills of type:", typeof data.extracted_skills);
     
     if (Array.isArray(data.extracted_skills)) {
-      // Already an array, use directly
-      extractedSkills = data.extracted_skills;
-      console.log("Skills already in array format");
+      // Already an array, ensure all items are strings
+      extractedSkills = data.extracted_skills.map((skill: any) => String(skill));
+      console.log("Skills already in array format, ensuring all are strings");
     } else if (typeof data.extracted_skills === 'string') {
       console.log("Skills in string format, attempting to parse...");
       
@@ -31,11 +31,11 @@ export function formatParsedData(parsedData: any, resumeText: string): ParsedRes
         // Try to parse as JSON if it's not a simple comma-separated list
         try {
           const parsed = JSON.parse(data.extracted_skills);
-          extractedSkills = Array.isArray(parsed) ? parsed : [data.extracted_skills];
+          extractedSkills = Array.isArray(parsed) ? parsed.map(String) : [String(data.extracted_skills)];
           console.log("Successfully parsed skills JSON string");
         } catch (e) {
           // If parsing fails, treat as a single skill
-          extractedSkills = [data.extracted_skills];
+          extractedSkills = [String(data.extracted_skills)];
           console.log("Using skills string as a single skill");
         }
       }
@@ -48,6 +48,11 @@ export function formatParsedData(parsedData: any, resumeText: string): ParsedRes
     // Remove any empty skills
     extractedSkills = extractedSkills.filter(skill => skill && skill.trim() !== '');
     console.log(`Final skills array has ${extractedSkills.length} items`);
+    
+    // Log sample of skills for debugging
+    if (extractedSkills.length > 0) {
+      console.log("Sample skills:", extractedSkills.slice(0, 5));
+    }
   }
   
   // Fallback for empty skills
@@ -68,12 +73,15 @@ export function formatParsedData(parsedData: any, resumeText: string): ParsedRes
     );
     
     console.log(`Fallback extraction found ${extractedSkills.length} potential skills`);
+    if (extractedSkills.length > 0) {
+      console.log("Fallback extracted skills:", extractedSkills);
+    }
   }
   
   // Process array fields consistently
   const processArrayField = (field: any): string[] => {
     if (!field) return [];
-    if (Array.isArray(field)) return field;
+    if (Array.isArray(field)) return field.map(String);
     if (typeof field === 'string') {
       if (field.includes(',')) {
         return field.split(',').map(item => item.trim());
@@ -81,14 +89,15 @@ export function formatParsedData(parsedData: any, resumeText: string): ParsedRes
       
       try {
         const parsed = JSON.parse(field);
-        return Array.isArray(parsed) ? parsed : [field];
+        return Array.isArray(parsed) ? parsed.map(String) : [String(field)];
       } catch (e) {
-        return [field];
+        return [String(field)];
       }
     }
     return [];
   };
   
+  // Make sure to explicitly cast all string arrays
   return {
     summary: data.summary || "",
     extracted_skills: extractedSkills,

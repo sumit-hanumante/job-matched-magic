@@ -81,6 +81,35 @@ export async function processWithAI(prompt: string, apiKey: string): Promise<Par
       console.log("Successfully parsed JSON response");
       console.log("Parsed data keys:", Object.keys(parsedData));
       
+      // Ensure extracted_skills is always a string array
+      if (parsedData.extracted_skills) {
+        console.log("Processing extracted_skills of type:", typeof parsedData.extracted_skills);
+        
+        if (Array.isArray(parsedData.extracted_skills)) {
+          // Ensure all items are strings
+          parsedData.extracted_skills = parsedData.extracted_skills.map(item => String(item));
+          console.log("Converted extracted_skills array items to strings");
+        } else if (typeof parsedData.extracted_skills === 'string') {
+          // Convert string to array
+          if (parsedData.extracted_skills.includes(',')) {
+            parsedData.extracted_skills = parsedData.extracted_skills.split(',').map(s => s.trim());
+            console.log("Split comma-separated skills into array");
+          } else {
+            parsedData.extracted_skills = [parsedData.extracted_skills];
+            console.log("Wrapped single skill string in array");
+          }
+        } else if (typeof parsedData.extracted_skills === 'object') {
+          parsedData.extracted_skills = Object.values(parsedData.extracted_skills).map(String);
+          console.log("Converted object values to string array");
+        } else {
+          console.warn("Invalid extracted_skills format, defaulting to empty array");
+          parsedData.extracted_skills = [];
+        }
+      } else {
+        console.log("No extracted_skills found, initializing as empty array");
+        parsedData.extracted_skills = [];
+      }
+      
       return parsedData;
     } catch (parseErr) {
       console.error("Failed to parse Gemini response as JSON:", parseErr);

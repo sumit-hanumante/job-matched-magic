@@ -46,8 +46,8 @@ export const useResumeParser = () => {
       console.log("Request payload:", JSON.stringify(requestPayload).substring(0, 100) + "...");
       console.log("Request headers:", { "Content-Type": "application/json" });
 
-      // Log the function URL for debugging
-      const functionUrl = `${supabase.supabaseUrl}/functions/v1/parse-resume`;
+      // Get function URL for error handling
+      const functionUrl = new URL('/functions/v1/parse-resume', supabase.supabaseUrl).toString();
       console.log("Edge function URL:", functionUrl);
       
       // Using supabase.functions.invoke which handles auth tokens and other details automatically
@@ -71,11 +71,13 @@ export const useResumeParser = () => {
         // Try a direct fetch to get more error details
         console.log("Attempting direct fetch for more error details...");
         try {
+          const accessToken = (await supabase.auth.getSession()).data.session?.access_token || '';
+          
           const directResponse = await fetch(functionUrl, {
             method: "POST",
             headers: { 
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${supabase.auth.getSession().then(res => res.data.session?.access_token || '')}`
+              "Authorization": `Bearer ${accessToken}`
             },
             body: JSON.stringify(requestPayload)
           });
