@@ -16,6 +16,7 @@ export const useResumeParser = () => {
       
       if (error) {
         console.error("Parser function test error:", error);
+        console.error("Error details:", JSON.stringify(error));
         return false;
       }
       
@@ -23,6 +24,7 @@ export const useResumeParser = () => {
       return data?.success === true;
     } catch (error) {
       console.error("Failed to test parser function:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack available");
       return false;
     }
   };
@@ -38,16 +40,20 @@ export const useResumeParser = () => {
     console.log("First 50 chars of text:", resumeText.substring(0, 50));
     
     try {
-      // Make sure we're sending a properly formatted JSON object
+      // Make sure we're sending a properly formatted JSON object with the correct Content-Type
       const requestPayload = { resumeText };
       
       console.log("Request payload:", JSON.stringify(requestPayload).substring(0, 100) + "...");
+      console.log("Request headers:", { "Content-Type": "application/json" });
       
+      // Using supabase.functions.invoke which handles auth tokens and other details automatically
       const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: requestPayload
       });
+      
+      console.log("Edge function call completed");
       
       if (parseError) {
         console.error("Edge function error details:", {

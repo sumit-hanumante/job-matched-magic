@@ -9,6 +9,7 @@ import { formatParsedData } from "./formatter.ts";
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
+    console.log("Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -33,6 +34,7 @@ serve(async (req) => {
       
       try {
         parsedBody = JSON.parse(requestText);
+        console.log("Parsed JSON body successfully");
       } catch (jsonError) {
         console.error("JSON parse error:", jsonError);
         throw new Error(`Failed to parse JSON: ${jsonError.message}`);
@@ -51,9 +53,18 @@ serve(async (req) => {
     // Handle test requests
     if (test === true) {
       console.log("Received test request, returning success");
+      const response = {
+        success: true,
+        message: "Edge function is working properly"
+      };
+      
+      console.log("Test response:", JSON.stringify(response));
+      
       return new Response(
-        JSON.stringify({ success: true, message: "Edge function is working properly" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify(response),
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
       );
     }
     
@@ -71,13 +82,20 @@ serve(async (req) => {
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiApiKey) {
       console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
+      const errorResponse = {
+        success: false,
+        error: "GEMINI_API_KEY is not configured. Please contact the administrator.",
+        errorType: "MissingAPIKey"
+      };
+      
+      console.log("Returning error response:", JSON.stringify(errorResponse));
+      
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: "GEMINI_API_KEY is not configured. Please contact the administrator.",
-          errorType: "MissingAPIKey"
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify(errorResponse),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
       );
     }
     
@@ -90,11 +108,12 @@ serve(async (req) => {
     // 4. Process with AI
     try {
       const apiStartTime = Date.now();
+      console.log("Calling Gemini API at:", new Date().toISOString());
       const parsedData = await processWithAI(prompt, geminiApiKey);
       console.log(`Gemini API response received in ${Date.now() - apiStartTime}ms`);
       
       // Log raw API response for debugging
-      console.log("Gemini raw output:", JSON.stringify(parsedData));
+      console.log("Gemini raw output:", JSON.stringify(parsedData, null, 2));
       
       // Check if we have skills
       if (!parsedData.extracted_skills || 
@@ -112,7 +131,7 @@ serve(async (req) => {
       // 5. Format the data with defaults
       const formattedData = formatParsedData(parsedData, resumeText);
       
-      console.log("Successfully formatted data, returning response");
+      console.log("Successfully formatted data, preparing response");
       console.log("Skills count:", formattedData.extracted_skills?.length || 0);
       if (formattedData.extracted_skills && formattedData.extracted_skills.length > 0) {
         console.log("Sample skills:", formattedData.extracted_skills.slice(0, 5));
@@ -131,49 +150,57 @@ serve(async (req) => {
         dataKeys: Object.keys(formattedData)
       });
       
+      // Log complete response structure before sending
+      console.log("Response headers:", JSON.stringify({ ...corsHeaders, "Content-Type": "application/json" }));
+      
       return new Response(
         JSON.stringify(response),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
       );
       
     } catch (apiError) {
       console.error("Error calling Gemini API:", apiError);
       console.error("Error details:", apiError.stack || "No stack trace available");
       
-      console.log("Returning error response:", {
+      const errorResponse = {
         success: false,
-        error: apiError.message || "Unknown error",
+        error: `AI processing error: ${apiError.message || "Unknown error"}`,
         errorType: "AIProcessingError"
-      });
+      };
+      
+      console.log("Returning error response:", JSON.stringify(errorResponse));
+      console.log("Response headers:", JSON.stringify({ ...corsHeaders, "Content-Type": "application/json" }));
       
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: `AI processing error: ${apiError.message || "Unknown error"}`,
-          errorType: "AIProcessingError"
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify(errorResponse),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
       );
     }
   } catch (error) {
     console.error("Error in parse-resume:", error);
     console.error("Error stack:", error.stack || "No stack trace available");
     
-    console.log("Returning error response:", {
+    const errorResponse = {
       success: false,
       error: error.message || "Failed to process request",
       errorType: error.name || "Unknown",
       processingTime: Date.now() - startTime
-    });
+    };
+    
+    console.log("Returning error response:", JSON.stringify(errorResponse));
+    console.log("Response headers:", JSON.stringify({ ...corsHeaders, "Content-Type": "application/json" }));
     
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message || "Failed to process request",
-        errorType: error.name || "Unknown",
-        processingTime: Date.now() - startTime
-      }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify(errorResponse),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      }
     );
   } finally {
     console.log(`----- parse-resume function: END (took ${Date.now() - startTime}ms) -----`);
