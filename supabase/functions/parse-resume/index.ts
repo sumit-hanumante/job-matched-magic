@@ -67,7 +67,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify(response),
         { 
-          headers: { ...corsHeaders } 
+          headers: corsHeaders 
         }
       );
     }
@@ -132,7 +132,7 @@ serve(async (req) => {
         JSON.stringify(errorResponse),
         { 
           status: 400, 
-          headers: { ...corsHeaders } 
+          headers: corsHeaders 
         }
       );
     }
@@ -191,12 +191,12 @@ serve(async (req) => {
       });
       
       // Log complete response structure before sending
-      console.log("Response headers:", JSON.stringify({ ...corsHeaders }));
+      console.log("Response headers:", JSON.stringify(corsHeaders));
       
       return new Response(
         responseJson,
         { 
-          headers: { ...corsHeaders } 
+          headers: corsHeaders 
         }
       );
       
@@ -211,13 +211,13 @@ serve(async (req) => {
       };
       
       console.log("Returning error response:", JSON.stringify(errorResponse));
-      console.log("Response headers:", JSON.stringify({ ...corsHeaders }));
+      console.log("Response headers:", JSON.stringify(corsHeaders));
       
       return new Response(
         JSON.stringify(errorResponse),
         { 
           status: 500, 
-          headers: { ...corsHeaders } 
+          headers: corsHeaders 
         }
       );
     }
@@ -233,13 +233,13 @@ serve(async (req) => {
     };
     
     console.log("Returning error response:", JSON.stringify(errorResponse));
-    console.log("Response headers:", JSON.stringify({ ...corsHeaders }));
+    console.log("Response headers:", JSON.stringify(corsHeaders));
     
     return new Response(
       JSON.stringify(errorResponse),
       { 
         status: 400, 
-        headers: { ...corsHeaders } 
+        headers: corsHeaders 
       }
     );
   } finally {

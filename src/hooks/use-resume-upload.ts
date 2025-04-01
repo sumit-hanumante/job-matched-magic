@@ -36,7 +36,20 @@ export const useResumeUpload = (
       // --- UNAUTHENTICATED FLOW ---
       if (!user) {
         console.log("[ResumeUpload] User not authenticated, performing unauthenticated flow");
-        await uploadToTempStorage(file);
+        
+        try {
+          await uploadToTempStorage(file);
+        } catch (storageError) {
+          console.error("[ResumeUpload] Storage error:", storageError);
+          // If we get an RLS policy error, continue with the flow but show a more specific message
+          if (storageError.message?.includes('row-level security policy')) {
+            toast({
+              variant: "destructive",
+              title: "Storage permission error",
+              description: "There was an issue with storage permissions. Please try logging in first.",
+            });
+          }
+        }
         
         if (onLoginRequired) {
           console.log("[ResumeUpload] Prompting user to login/register");
@@ -44,9 +57,8 @@ export const useResumeUpload = (
         }
         
         toast({
-          title: "File uploaded successfully",
-          description:
-            "Please create an account to analyze your resume and get job matches.",
+          title: "Please create an account",
+          description: "Please create an account to analyze your resume and get job matches.",
         });
         
         return false;
@@ -75,17 +87,29 @@ export const useResumeUpload = (
       
       // 3. Upload the file to storage
       console.log("[ResumeUpload] Step 3: Uploading file to storage");
-      const filePath = await uploadToPermanentStorage(user.id, file);
-      const publicUrl = getFilePublicUrl(filePath);
-      console.log("[ResumeUpload] File uploaded to storage:", publicUrl);
+      let filePath;
+      try {
+        filePath = await uploadToPermanentStorage(user.id, file);
+        const publicUrl = getFilePublicUrl(filePath);
+        console.log("[ResumeUpload] File uploaded to storage:", publicUrl);
+      } catch (storageError) {
+        console.error("[ResumeUpload] Storage upload failed:", storageError);
+        // Continue with the process but log the issue
+        filePath = `failed-upload-${Date.now()}-${file.name}`;
+        toast({
+          variant: "warning",
+          title: "Storage issue",
+          description: "Your resume data will be processed, but the original file couldn't be stored.",
+        });
+      }
+      
       setUploadProgress(60);
       
       // 4. Parse the resume with AI
-      console.log("[ResumeUpload] Step 4: Parsing resume with AI");
+      console.log("[ResumeUpload] Step 4: Testing parser function");
       let parsedData = null;
       try {
         // Test the parser functionality first
-        console.log("[ResumeUpload] Testing parser function");
         const testResult = await supabase.functions.invoke("parse-resume", {
           method: "POST",
           body: { test: true }
@@ -100,7 +124,7 @@ export const useResumeUpload = (
             title: "Parser test failed",
             description: "Could not connect to resume parser. Basic resume will be uploaded.",
           });
-        } else {
+        } else if (testResult.data?.success) {
           console.log("[ResumeUpload] Now parsing resume text with length:", extractedText.length);
           console.log("[ResumeUpload] Text sample for parsing:", extractedText.substring(0, 300));
           
@@ -110,6 +134,13 @@ export const useResumeUpload = (
             hasSkills: parsedData?.extracted_skills?.length > 0,
             skillsCount: parsedData?.extracted_skills?.length || 0,
             hasSummary: !!parsedData?.summary,
+          });
+        } else {
+          console.error("[ResumeUpload] Parser test returned unexpected format:", testResult);
+          toast({
+            variant: "destructive",
+            title: "Parser test issue",
+            description: "Resume parser returned an unexpected response. Basic resume will be uploaded.",
           });
         }
       } catch (parseError) {
@@ -130,7 +161,7 @@ export const useResumeUpload = (
       const resumeData: Record<string, any> = {
         user_id: user.id,
         file_name: file.name,
-        file_path: filePath,
+        file_path: filePath || 'unknown-path',
         content_type: file.type,
         status: parsedData ? "processed" : "uploaded",
         order_index: 1,
@@ -192,8 +223,14 @@ export const useResumeUpload = (
         return true;
       } catch (insertError) {
         console.error("[ResumeUpload] Database insert failed:", insertError);
-        console.error("[ResumeUpload] Attempting to clean up storage...");
-        await deleteFile(filePath);
+        if (filePath) {
+          console.error("[ResumeUpload] Attempting to clean up storage...");
+          try {
+            await deleteFile(filePath);
+          } catch (cleanupError) {
+            console.error("[ResumeUpload] Storage cleanup failed:", cleanupError);
+          }
+        }
         throw insertError;
       }
     } catch (error) {

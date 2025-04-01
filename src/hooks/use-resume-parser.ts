@@ -11,7 +11,7 @@ export const useResumeParser = () => {
       const { data, error } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: { test: true } // This is already correct - supabase.functions.invoke handles JSON stringification
+        body: { test: true }
       });
       
       if (error) {
@@ -40,7 +40,11 @@ export const useResumeParser = () => {
     console.log("[ResumeParser] First 50 chars of text:", resumeText.substring(0, 50));
     
     try {
-      const payload = { resumeText };
+      // Create payload - IMPORTANT: supabase.functions.invoke() handles JSON stringification
+      // BUT we should still ensure our payload is structured correctly
+      const payload = {
+        resumeText: resumeText
+      };
       
       console.log("[ResumeParser] Request payload structure:", Object.keys(payload));
       console.log("[ResumeParser] Request payload resumeText length:", payload.resumeText.length);
@@ -52,7 +56,7 @@ export const useResumeParser = () => {
       const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: payload // supabase client automatically stringifies this
+        body: payload // supabase client automatically handles JSON stringification
       });
       
       console.log("[ResumeParser] Edge function call completed");
