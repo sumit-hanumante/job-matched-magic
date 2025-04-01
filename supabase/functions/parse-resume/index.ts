@@ -25,18 +25,14 @@ serve(async (req) => {
     // 1. Parse the request body
     let parsedBody: ResumeParseRequest;
     try {
-      // Clone the request before reading the body
-      const clonedReq = req.clone();
-      const requestText = await clonedReq.text();
+      // Clone the request before reading the body to avoid consuming it
+      const requestText = await req.text();
       console.log("Raw request body length:", requestText.length);
       
       if (requestText.length > 0) {
         console.log("Request body preview (first 200 chars):", requestText.substring(0, 200));
       } else {
         console.error("CRITICAL ERROR: Empty request body received");
-      }
-      
-      if (!requestText || requestText.trim() === "") {
         throw new Error("Empty request body");
       }
       

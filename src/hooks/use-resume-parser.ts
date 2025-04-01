@@ -40,18 +40,13 @@ export const useResumeParser = () => {
     console.log("[ResumeParser] First 50 chars of text:", resumeText.substring(0, 50));
     
     try {
-      // Make sure we're sending a properly structured payload with correctly formatted JSON
-      const payload = { resumeText };
+      // Ensure text is properly formatted as JSON in the request body
+      console.log("[ResumeParser] Invoking edge function with properly formatted payload");
       
-      console.log("[ResumeParser] Request payload structure:", Object.keys(payload));
-      console.log("[ResumeParser] Request payload resumeText length:", payload.resumeText.length);
-
-      // Invoke the edge function with proper headers
-      console.log("[ResumeParser] Invoking edge function...");
       const { data: responseData, error: parseError } = await supabase.functions.invoke("parse-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: payload
+        body: { resumeText }
       });
       
       console.log("[ResumeParser] Edge function call completed");

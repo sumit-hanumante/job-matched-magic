@@ -64,6 +64,7 @@ export const useResumeUpload = (
         throw new Error("Failed to extract meaningful text from resume");
       }
       console.log(`[ResumeUpload] Text extracted successfully (${extractedText.length} chars)`);
+      console.log("[ResumeUpload] Text sample:", extractedText.substring(0, 200));
       setUploadProgress(30);
       
       // 2. Shift older resumes to maintain order
@@ -85,28 +86,39 @@ export const useResumeUpload = (
       try {
         // Test the parser functionality first
         console.log("[ResumeUpload] Testing parser function");
-        const { data: testData, error: testError } = await supabase.functions.invoke("parse-resume", {
+        const testResult = await supabase.functions.invoke("parse-resume", {
           method: "POST",
           body: { test: true }
         });
         
-        if (testError) {
-          console.error("[ResumeUpload] Parser test failed:", testError);
-          throw new Error(`Parser test failed: ${testError.message}`);
+        console.log("[ResumeUpload] Parser test response:", testResult);
+        
+        if (testResult.error) {
+          console.error("[ResumeUpload] Parser test failed:", testResult.error);
+          toast({
+            variant: "destructive",
+            title: "Parser test failed",
+            description: "Could not connect to resume parser. Basic resume will be uploaded.",
+          });
+        } else {
+          console.log("[ResumeUpload] Now parsing resume text with length:", extractedText.length);
+          
+          // Now actually parse the resume
+          parsedData = await parseResumeText(extractedText);
+          console.log("[ResumeUpload] Resume parsed successfully:", {
+            hasSkills: parsedData?.extracted_skills?.length > 0,
+            skillsCount: parsedData?.extracted_skills?.length || 0,
+            hasSummary: !!parsedData?.summary,
+          });
         }
-        
-        console.log("[ResumeUpload] Parser test response:", testData);
-        
-        // Now actually parse the resume
-        parsedData = await parseResumeText(extractedText);
-        console.log("[ResumeUpload] Resume parsed successfully:", {
-          hasSkills: parsedData?.extracted_skills?.length > 0,
-          skillsCount: parsedData?.extracted_skills?.length || 0,
-          hasSummary: !!parsedData?.summary,
-        });
       } catch (parseError) {
         console.error("[ResumeUpload] Resume parsing failed:", parseError);
         console.log("[ResumeUpload] Proceeding with basic resume data without AI parsing");
+        toast({
+          variant: "destructive",
+          title: "AI parsing failed",
+          description: "Your resume was uploaded but couldn't be automatically analyzed.",
+        });
       }
       setUploadProgress(80);
       
@@ -149,9 +161,13 @@ export const useResumeUpload = (
       }
 
       try {
-        console.log("[ResumeUpload] Inserting resume with data:", resumeData);
+        console.log("[ResumeUpload] Inserting resume with data:", {
+          ...resumeData,
+          resume_text: `${resumeData.resume_text?.substring(0, 100)}... (truncated)`
+        });
         
         // Direct supabase insert for debugging
+        console.log("[ResumeUpload] Executing direct DB insert...");
         const { data: directData, error: directError } = await supabase
           .from("resumes")
           .insert(resumeData)
