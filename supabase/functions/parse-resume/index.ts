@@ -88,6 +88,16 @@ serve(async (req) => {
     
     // 2. Get the API key and validate it
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+
+    // Debug: Check API key existence
+    console.log("GEMINI_API_KEY check in index.ts:");
+    if (!geminiApiKey) {
+      console.error("CRITICAL ERROR: GEMINI_API_KEY environment variable is missing or empty!");
+      console.log("Environment variables available:", Object.keys(Deno.env.toObject()));
+    } else {
+      console.log(`GEMINI_API_KEY exists with length: ${geminiApiKey.length}`);
+    }
+    
     if (!geminiApiKey) {
       console.error("GEMINI_API_KEY is missing! Setting up edge function secrets is required.");
       const errorResponse = {

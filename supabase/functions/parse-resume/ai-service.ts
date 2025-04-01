@@ -3,6 +3,18 @@ import { ParsedResumeData } from "./types.ts";
 
 // Service to handle AI API interactions
 export async function processWithAI(prompt: string, apiKey: string): Promise<ParsedResumeData> {
+  // Debug: Check if API key exists and log a portion of it
+  console.log("-------------------------");
+  console.log("GEMINI_API_KEY check:");
+  if (!apiKey) {
+    console.error("CRITICAL ERROR: GEMINI_API_KEY is undefined or empty");
+  } else {
+    console.log(`GEMINI_API_KEY exists with length: ${apiKey.length}`);
+    console.log(`GEMINI_API_KEY first 4 chars: ${apiKey.substring(0, 4)}...`);
+    console.log(`GEMINI_API_KEY last 4 chars: ...${apiKey.substring(apiKey.length - 4)}`);
+  }
+  console.log("-------------------------");
+
   console.log("Using Gemini API with key starting with:", `${apiKey.substring(0, 4)}...`);
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   
