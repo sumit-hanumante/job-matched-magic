@@ -1,10 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsHeaders } from "./cors-headers.ts";
+import { ResumeParseRequest, ParsedResumeResponse } from "./types.ts";
+import { processWithAI } from "./ai-service.ts";
+import { buildResumeParsingPrompt } from "./prompts.ts";
+import { formatParsedData } from "./formatter.ts";
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -21,30 +21,28 @@ serve(async (req) => {
     console.log("Request headers:", JSON.stringify(Object.fromEntries(req.headers.entries()), null, 2));
     
     // 1. Parse the request body
-    let parsedBody;
+    let parsedBody: ResumeParseRequest;
     try {
-      // Parse body directly - should work with both stringified and raw JSON
-      parsedBody = await req.json();
+      const requestText = await req.text();
+      console.log("Raw request body length:", requestText.length);
+      console.log("Request body preview (first 200 chars):", requestText.substring(0, 200));
+      
+      if (!requestText || requestText.trim() === "") {
+        throw new Error("Empty request body");
+      }
+      
+      try {
+        parsedBody = JSON.parse(requestText);
+      } catch (jsonError) {
+        console.error("JSON parse error:", jsonError);
+        throw new Error(`Failed to parse JSON: ${jsonError.message}`);
+      }
+      
       console.log("Request body parsed successfully");
       console.log("Body keys:", Object.keys(parsedBody));
     } catch (parseError) {
-      console.error("Failed to parse request body as JSON:", parseError);
-      
-      // As a fallback, try to read the raw text and then parse it
-      try {
-        const rawText = await req.text();
-        console.log("Raw body length:", rawText.length);
-        if (rawText.length > 0) {
-          console.log("Raw body preview:", rawText.substring(0, 100) + "...");
-          parsedBody = JSON.parse(rawText);
-          console.log("Parsed JSON from raw text successfully");
-        } else {
-          throw new Error("Empty request body");
-        }
-      } catch (textError) {
-        console.error("Failed to read request body as text:", textError);
-        throw new Error("Invalid or empty request body");
-      }
+      console.error("Failed to parse request body:", parseError);
+      throw new Error(`Invalid or empty request body: ${parseError.message}`);
     }
     
     const { resumeText, test } = parsedBody;
@@ -59,13 +57,15 @@ serve(async (req) => {
       );
     }
     
-    if (!resumeText) {
+    if (!resumeText || typeof resumeText !== 'string') {
       console.error("No resumeText provided in request body. Keys found:", Object.keys(parsedBody));
       throw new Error("No resume text provided in the request body");
     }
     
     console.log(`Parsed resumeText length: ${resumeText.length}`);
-    console.log(`resumeText preview: ${resumeText.substring(0, 100)}...`);
+    if (resumeText.length > 0) {
+      console.log(`resumeText preview: ${resumeText.substring(0, 100)}...`);
+    }
     
     // 2. Get the API key and validate it
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
@@ -83,143 +83,68 @@ serve(async (req) => {
     
     console.log("GEMINI_API_KEY found with length:", geminiApiKey.length);
     
-    // 3. Build the prompt for resume parsing - 20% shorter but keeping all essential parts
-    const prompt = `
-      Analyze this resume and extract details in JSON format optimized for job matching:
-      
-      Return a JSON with these keys:
-      - personal_information (name, email, phone, location)
-      - summary (brief candidate overview)
-      - extracted_skills (array of technical skills, soft skills, tools)
-      - experience (work history with company, role, dates, responsibilities)
-      - preferred_locations (array of locations preferred)
-      - preferred_companies (array of company names the candidate has mentioned interest in)
-      - min_salary (minimum salary as number without currency symbols)
-      - max_salary (maximum salary as number without currency symbols)
-      - preferred_work_type (remote, hybrid, on-site)
-      - years_of_experience (total years of experience as number)
-      - possible_job_titles (suitable job titles based on skills/experience)
-      
-      Keep skills as a clean array of strings. Salary values should be numeric only.
-      
-      Resume text:
-      ${resumeText}
-    `;
-
+    // 3. Build the prompt for resume parsing
+    const prompt = buildResumeParsingPrompt(resumeText);
     console.log("Prepared prompt with length:", prompt.length);
     
-    // 4. Direct API call to Gemini using fetch
+    // 4. Process with AI
     try {
       const apiStartTime = Date.now();
-      console.log(`Using Gemini API with key starting with: ${geminiApiKey.substring(0, 4)}...`);
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
-      
-      // Create the request payload
-      const requestPayload = {
-        contents: [
-          {
-            parts: [
-              { text: prompt }
-            ]
-          }
-        ]
-      };
-      
-      // Log the full request details (URL and payload)
-      console.log("Making API request to:", apiUrl);
-      console.log("Request payload size:", JSON.stringify(requestPayload).length);
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestPayload)
-      });
-      
+      const parsedData = await processWithAI(prompt, geminiApiKey);
       console.log(`Gemini API response received in ${Date.now() - apiStartTime}ms`);
-      console.log(`Response status: ${response.status} ${response.statusText}`);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Gemini API error: ${response.status} ${response.statusText}`);
-        console.error(`Error details: ${errorText}`);
-        throw new Error(`Gemini API returned error ${response.status}: ${errorText}`);
+      // Log raw API response for debugging
+      console.log("Gemini raw output:", JSON.stringify(parsedData));
+      
+      // Check if we have skills
+      if (!parsedData.extracted_skills || 
+          (Array.isArray(parsedData.extracted_skills) && parsedData.extracted_skills.length === 0)) {
+        console.warn("Warning: No skills extracted from resume by Gemini API");
+      } else {
+        console.log("Skills extracted successfully:", 
+                    typeof parsedData.extracted_skills === 'string' 
+                      ? parsedData.extracted_skills.substring(0, 100) + '...'
+                      : Array.isArray(parsedData.extracted_skills) 
+                        ? parsedData.extracted_skills.slice(0, 5) 
+                        : 'Invalid format');
       }
       
-      const responseData = await response.json();
-      console.log("Received response from Gemini API");
-      console.log("Response structure:", JSON.stringify(Object.keys(responseData)));
-      
-      if (!responseData.candidates || responseData.candidates.length === 0) {
-        console.error("No candidates in Gemini response:", JSON.stringify(responseData));
-        throw new Error("No content in Gemini API response");
-      }
-      
-      // Extract the text from the response
-      const candidateContent = responseData.candidates[0].content;
-      if (!candidateContent || !candidateContent.parts || candidateContent.parts.length === 0) {
-        console.error("Unexpected Gemini response format:", JSON.stringify(responseData));
-        throw new Error("Unexpected Gemini response format");
-      }
-      
-      const rawText = candidateContent.parts[0].text;
-      console.log(`Raw text response length: ${rawText.length}`);
-      console.log(`Response preview: ${rawText.substring(0, 150)}...`);
-      
-      // 5. Parse the JSON from the response
-      let parsedData;
-      try {
-        // Find JSON in the text (in case the model wrapped it with markdown)
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        const jsonString = jsonMatch ? jsonMatch[0] : rawText;
-        
-        console.log("Attempting to parse JSON from response...");
-        parsedData = JSON.parse(jsonString);
-        console.log("Successfully parsed JSON response");
-        console.log("Parsed data keys:", Object.keys(parsedData));
-        
-      } catch (parseErr) {
-        console.error("Failed to parse Gemini response as JSON:", parseErr);
-        console.error("Raw text response:", rawText);
-        throw new Error("Failed to parse AI response as valid JSON");
-      }
-      
-      // 6. Format the data with defaults if fields are missing
-      const formattedData = {
-        personal_information: parsedData.personal_information || {},
-        summary: parsedData.summary || "",
-        extracted_skills: Array.isArray(parsedData.extracted_skills) ? parsedData.extracted_skills : [],
-        experience: parsedData.experience || "",
-        preferred_locations: Array.isArray(parsedData.preferred_locations) ? parsedData.preferred_locations : [],
-        preferred_companies: Array.isArray(parsedData.preferred_companies) ? parsedData.preferred_companies : [],
-        min_salary: parsedData.min_salary || null,
-        max_salary: parsedData.max_salary || null,
-        preferred_work_type: parsedData.preferred_work_type || null,
-        years_of_experience: parsedData.years_of_experience || null,
-        possible_job_titles: Array.isArray(parsedData.possible_job_titles) ? parsedData.possible_job_titles : [],
-        resume_text: resumeText
-      };
+      // 5. Format the data with defaults
+      const formattedData = formatParsedData(parsedData, resumeText);
       
       console.log("Successfully formatted data, returning response");
-      console.log("Skills count:", formattedData.extracted_skills.length);
-      if (formattedData.extracted_skills.length > 0) {
+      console.log("Skills count:", formattedData.extracted_skills?.length || 0);
+      if (formattedData.extracted_skills && formattedData.extracted_skills.length > 0) {
         console.log("Sample skills:", formattedData.extracted_skills.slice(0, 5));
       }
       
-      // 7. Return the structured data
+      // 6. Return the structured data
+      const response: ParsedResumeResponse = {
+        success: true,
+        data: formattedData,
+        processingTime: Date.now() - startTime
+      };
+
+      console.log("Returning success response:", {
+        success: true,
+        processingTime: Date.now() - startTime,
+        dataKeys: Object.keys(formattedData)
+      });
+      
       return new Response(
-        JSON.stringify({
-          success: true,
-          data: formattedData,
-          processingTime: Date.now() - startTime
-        }),
+        JSON.stringify(response),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
       
     } catch (apiError) {
       console.error("Error calling Gemini API:", apiError);
       console.error("Error details:", apiError.stack || "No stack trace available");
+      
+      console.log("Returning error response:", {
+        success: false,
+        error: apiError.message || "Unknown error",
+        errorType: "AIProcessingError"
+      });
       
       return new Response(
         JSON.stringify({
@@ -233,6 +158,13 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error in parse-resume:", error);
     console.error("Error stack:", error.stack || "No stack trace available");
+    
+    console.log("Returning error response:", {
+      success: false,
+      error: error.message || "Failed to process request",
+      errorType: error.name || "Unknown",
+      processingTime: Date.now() - startTime
+    });
     
     return new Response(
       JSON.stringify({
