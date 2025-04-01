@@ -93,6 +93,22 @@ serve(async (req) => {
       const parsedData = await processWithAI(prompt, geminiApiKey);
       console.log(`Gemini API response received in ${Date.now() - apiStartTime}ms`);
       
+      // Log raw API response for debugging
+      console.log("Gemini raw output:", JSON.stringify(parsedData));
+      
+      // Check if we have skills
+      if (!parsedData.extracted_skills || 
+          (Array.isArray(parsedData.extracted_skills) && parsedData.extracted_skills.length === 0)) {
+        console.warn("Warning: No skills extracted from resume by Gemini API");
+      } else {
+        console.log("Skills extracted successfully:", 
+                    typeof parsedData.extracted_skills === 'string' 
+                      ? parsedData.extracted_skills.substring(0, 100) + '...'
+                      : Array.isArray(parsedData.extracted_skills) 
+                        ? parsedData.extracted_skills.slice(0, 5) 
+                        : 'Invalid format');
+      }
+      
       // 5. Format the data with defaults
       const formattedData = formatParsedData(parsedData, resumeText);
       

@@ -71,6 +71,12 @@ export const useResumeParser = () => {
       console.log("Resume parsed successfully");
       if (responseData.data) {
         console.log("Parsed data keys:", Object.keys(responseData.data));
+        console.log("Skills extracted:", responseData.data.extracted_skills?.length || 0);
+        if (responseData.data.extracted_skills?.length > 0) {
+          console.log("Sample skills:", responseData.data.extracted_skills.slice(0, 5));
+        } else {
+          console.warn("No skills were extracted from the resume");
+        }
         return responseData.data;
       } else {
         console.warn("No data returned from parse function");

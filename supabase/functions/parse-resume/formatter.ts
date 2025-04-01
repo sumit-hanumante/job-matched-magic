@@ -10,19 +10,64 @@ export function formatParsedData(parsedData: any, resumeText: string): ParsedRes
   console.log("Formatting parsed data with keys:", Object.keys(data));
   
   // Handle specific cases where data might not be in the expected format
-  let extractedSkills = [];
+  let extractedSkills: string[] = [];
+  
+  // Enhanced extraction of skills from different formats
   if (data.extracted_skills) {
+    console.log("Processing extracted_skills of type:", typeof data.extracted_skills);
+    
     if (Array.isArray(data.extracted_skills)) {
+      // Already an array, use directly
       extractedSkills = data.extracted_skills;
+      console.log("Skills already in array format");
     } else if (typeof data.extracted_skills === 'string') {
-      // Try to parse if it's a string that might be JSON
-      try {
-        const parsed = JSON.parse(data.extracted_skills);
-        extractedSkills = Array.isArray(parsed) ? parsed : [data.extracted_skills];
-      } catch (e) {
-        extractedSkills = [data.extracted_skills];
+      console.log("Skills in string format, attempting to parse...");
+      
+      // Check if it's a comma-separated list
+      if (data.extracted_skills.includes(',')) {
+        extractedSkills = data.extracted_skills.split(',').map((skill: string) => skill.trim());
+        console.log("Parsed comma-separated skills string into array");
+      } else {
+        // Try to parse as JSON if it's not a simple comma-separated list
+        try {
+          const parsed = JSON.parse(data.extracted_skills);
+          extractedSkills = Array.isArray(parsed) ? parsed : [data.extracted_skills];
+          console.log("Successfully parsed skills JSON string");
+        } catch (e) {
+          // If parsing fails, treat as a single skill
+          extractedSkills = [data.extracted_skills];
+          console.log("Using skills string as a single skill");
+        }
       }
+    } else if (typeof data.extracted_skills === 'object') {
+      // Handle cases where it might be an object but not an array
+      extractedSkills = Object.values(data.extracted_skills).map(String);
+      console.log("Converted object to skills array");
     }
+    
+    // Remove any empty skills
+    extractedSkills = extractedSkills.filter(skill => skill && skill.trim() !== '');
+    console.log(`Final skills array has ${extractedSkills.length} items`);
+  }
+  
+  // Fallback for empty skills
+  if (extractedSkills.length === 0) {
+    console.warn("No skills extracted, using fallback extraction");
+    
+    // Simple keyword-based fallback extraction
+    const techKeywords = [
+      "JavaScript", "TypeScript", "Python", "Java", "C#", "Ruby", "PHP", "React", 
+      "Angular", "Vue", "Node.js", "Express", "Django", "Flask", "Spring", "ASP.NET",
+      "SQL", "MongoDB", "PostgreSQL", "MySQL", "Redis", "AWS", "Azure", "GCP", 
+      "Docker", "Kubernetes", "CI/CD", "Git", "REST API", "GraphQL"
+    ];
+    
+    // Simple fallback: check if any tech keywords appear in the resume text
+    extractedSkills = techKeywords.filter(keyword => 
+      resumeText.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    console.log(`Fallback extraction found ${extractedSkills.length} potential skills`);
   }
   
   // Process array fields consistently
@@ -30,6 +75,10 @@ export function formatParsedData(parsedData: any, resumeText: string): ParsedRes
     if (!field) return [];
     if (Array.isArray(field)) return field;
     if (typeof field === 'string') {
+      if (field.includes(',')) {
+        return field.split(',').map(item => item.trim());
+      }
+      
       try {
         const parsed = JSON.parse(field);
         return Array.isArray(parsed) ? parsed : [field];
