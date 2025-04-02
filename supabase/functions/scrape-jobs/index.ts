@@ -137,7 +137,8 @@ serve(async (req) => {
       .upsert(
         allJobs.map(job => ({
           ...job,
-          last_scraped_at: new Date().toISOString()
+          last_scraped_at: new Date().toISOString(),
+          embedding: null // Explicitly set embedding to null to mark for processing
         })),
         {
           onConflict: 'external_job_id,source',
@@ -149,6 +150,8 @@ serve(async (req) => {
       throw upsertError;
     }
 
+    console.log("Deepak_Debug: Jobs scraped and inserted. Embeddings will be processed by cleanup-jobs edge function.");
+    
     return new Response(
       JSON.stringify({
         success: true,

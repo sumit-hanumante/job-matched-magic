@@ -22,7 +22,7 @@ export const useEmbeddings = () => {
    */
   const testEmbeddingFunction = async (): Promise<boolean> => {
     try {
-      console.log("[Embeddings] Testing embedding function...");
+      console.log("Deepak_Debug: [Embeddings] Testing embedding function...");
       const { data, error } = await supabase.functions.invoke("generate-embeddings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -30,14 +30,14 @@ export const useEmbeddings = () => {
       });
       
       if (error) {
-        console.error("[Embeddings] Function test error:", error);
+        console.error("Deepak_Debug: [Embeddings] Function test error:", error);
         return false;
       }
       
-      console.log("[Embeddings] Function test response:", data);
+      console.log("Deepak_Debug: [Embeddings] Function test response:", data);
       return data?.success === true;
     } catch (error) {
-      console.error("[Embeddings] Failed to test function:", error);
+      console.error("Deepak_Debug: [Embeddings] Failed to test function:", error);
       return false;
     }
   };
@@ -50,7 +50,7 @@ export const useEmbeddings = () => {
    */
   const generateEmbeddings = async (texts: string[]): Promise<number[][] | null> => {
     if (!texts || texts.length === 0) {
-      console.error("[Embeddings] No texts provided");
+      console.error("Deepak_Debug: [Embeddings] No texts provided");
       return null;
     }
 
@@ -59,11 +59,11 @@ export const useEmbeddings = () => {
       const validTexts = texts.filter(text => text && text.trim().length > 0);
       
       if (validTexts.length === 0) {
-        console.error("[Embeddings] No valid texts after filtering");
+        console.error("Deepak_Debug: [Embeddings] No valid texts after filtering");
         return null;
       }
       
-      console.log("[Embeddings] Generating embeddings for", validTexts.length, "texts");
+      console.log("Deepak_Debug: [Embeddings] Generating embeddings for", validTexts.length, "texts");
       
       // Invoke the edge function
       const { data, error } = await supabase.functions.invoke("generate-embeddings", {
@@ -73,7 +73,7 @@ export const useEmbeddings = () => {
       });
       
       if (error) {
-        console.error("[Embeddings] Function invocation error:", error);
+        console.error("Deepak_Debug: [Embeddings] Function invocation error:", error);
         toast({
           variant: "destructive",
           title: "Embedding generation failed",
@@ -82,11 +82,11 @@ export const useEmbeddings = () => {
         throw error;
       }
       
-      console.log("[Embeddings] Function response:", data);
+      console.log("Deepak_Debug: [Embeddings] Function response:", data);
       
       if (!data?.success || !data.embeddings) {
         const errorMsg = data?.error || "Failed to generate embeddings";
-        console.error("[Embeddings] Error in response:", errorMsg);
+        console.error("Deepak_Debug: [Embeddings] Error in response:", errorMsg);
         toast({
           variant: "destructive",
           title: "Embedding generation failed",
@@ -95,10 +95,10 @@ export const useEmbeddings = () => {
         throw new Error(errorMsg);
       }
       
-      console.log(`[Embeddings] Successfully generated ${data.embeddings.length} embeddings in ${data.processingTime}ms`);
+      console.log(`Deepak_Debug: [Embeddings] Successfully generated ${data.embeddings.length} embeddings in ${data.processingTime}ms`);
       return data.embeddings;
     } catch (error) {
-      console.error("[Embeddings] Error generating embeddings:", error);
+      console.error("Deepak_Debug: [Embeddings] Error generating embeddings:", error);
       return null;
     }
   };
@@ -111,11 +111,11 @@ export const useEmbeddings = () => {
    */
   const generateSingleEmbedding = async (text: string): Promise<number[] | null> => {
     if (!text || text.trim().length === 0) {
-      console.error("[Embeddings] Empty text provided");
+      console.error("Deepak_Debug: [Embeddings] Empty text provided");
       return null;
     }
     
-    console.log("[Embeddings] Generating single embedding for text:", text.substring(0, 50) + (text.length > 50 ? "..." : ""));
+    console.log("Deepak_Debug: [Embeddings] Generating single embedding for text:", text.substring(0, 50) + (text.length > 50 ? "..." : ""));
     
     const embeddings = await generateEmbeddings([text]);
     return embeddings ? embeddings[0] : null;
@@ -130,10 +130,10 @@ export const useEmbeddings = () => {
    */
   const processResumeEmbedding = async (resumeId: string, resumeText: string): Promise<boolean> => {
     try {
-      console.log(`[ResumeEmbedding] Processing embedding for resume ${resumeId}`);
+      console.log(`Deepak_Debug: [ResumeEmbedding] Processing embedding for resume ${resumeId}`);
       
       if (!resumeText || resumeText.trim().length === 0) {
-        console.error("[ResumeEmbedding] Empty resume text");
+        console.error("Deepak_Debug: [ResumeEmbedding] Empty resume text");
         return false;
       }
       
@@ -141,7 +141,7 @@ export const useEmbeddings = () => {
       const embedding = await generateSingleEmbedding(resumeText);
       
       if (!embedding) {
-        console.error("[ResumeEmbedding] Failed to generate embedding");
+        console.error("Deepak_Debug: [ResumeEmbedding] Failed to generate embedding");
         return false;
       }
       
@@ -152,14 +152,14 @@ export const useEmbeddings = () => {
         .eq('id', resumeId);
       
       if (updateError) {
-        console.error("[ResumeEmbedding] Failed to update resume with embedding:", updateError);
+        console.error("Deepak_Debug: [ResumeEmbedding] Failed to update resume with embedding:", updateError);
         return false;
       }
       
-      console.log(`[ResumeEmbedding] Successfully updated resume ${resumeId} with embedding`);
+      console.log(`Deepak_Debug: [ResumeEmbedding] Successfully updated resume ${resumeId} with embedding`);
       return true;
     } catch (error) {
-      console.error("[ResumeEmbedding] Error processing resume embedding:", error);
+      console.error("Deepak_Debug: [ResumeEmbedding] Error processing resume embedding:", error);
       return false;
     }
   };
