@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTextExtractor } from "./use-document-text-extractor";
@@ -5,7 +6,6 @@ import { useStorageService } from "./use-storage-service";
 import { useResumeParser } from "./use-resume-parser";
 import { useResumeDatabase } from "./use-resume-database";
 import { supabase } from "@/lib/supabase";
-import { useEmbeddings } from "@/hooks/use-embeddings";
 
 export const useResumeUpload = (
   user: any,
@@ -18,8 +18,8 @@ export const useResumeUpload = (
   const { uploadToTempStorage, uploadToPermanentStorage, getFilePublicUrl, deleteFile } = useStorageService();
   const { parseResumeText } = useResumeParser();
   const { shiftOlderResumes, insertResume } = useResumeDatabase();
-  const { processResumeEmbedding } = useEmbeddings();
 
+  // Main function to upload resume.
   const uploadResume = async (file: File) => {
     if (!file) return false;
     
@@ -33,6 +33,7 @@ export const useResumeUpload = (
         size: Math.round(file.size / 1024) + " KB",
       });
 
+      // --- UNAUTHENTICATED FLOW ---
       if (!user) {
         console.log("[ResumeUpload] User not authenticated, performing unauthenticated flow");
         
@@ -40,6 +41,7 @@ export const useResumeUpload = (
           await uploadToTempStorage(file);
         } catch (storageError) {
           console.error("[ResumeUpload] Storage error:", storageError);
+          // If we get an RLS policy error, continue with the flow but show a more specific message
           if (storageError.message?.includes('row-level security policy')) {
             toast({
               variant: "destructive",
@@ -62,8 +64,10 @@ export const useResumeUpload = (
         return false;
       }
 
+      // --- AUTHENTICATED FLOW ---
       console.log(`[ResumeUpload] Beginning authenticated flow for user ID: ${user.id}`);
       
+      // 1. Extract text from the file first, to ensure we can process it
       console.log("[ResumeUpload] Step 1: Extracting text from file");
       setUploadProgress(20);
       const extractedText = await extractTextFromFile(file);
@@ -75,11 +79,13 @@ export const useResumeUpload = (
       console.log("[ResumeUpload] Text sample:", extractedText.substring(0, 200));
       setUploadProgress(30);
       
+      // 2. Shift older resumes to maintain order
       console.log("[ResumeUpload] Step 2: Shifting older resumes");
       await shiftOlderResumes(user.id);
       console.log("[ResumeUpload] Resume shifting completed");
       setUploadProgress(40);
       
+      // 3. Upload the file to storage
       console.log("[ResumeUpload] Step 3: Uploading file to storage");
       let filePath;
       try {
@@ -88,6 +94,7 @@ export const useResumeUpload = (
         console.log("[ResumeUpload] File uploaded to storage:", publicUrl);
       } catch (storageError) {
         console.error("[ResumeUpload] Storage upload failed:", storageError);
+        // Continue with the process but log the issue
         filePath = `failed-upload-${Date.now()}-${file.name}`;
         toast({
           variant: "destructive",
@@ -98,9 +105,11 @@ export const useResumeUpload = (
       
       setUploadProgress(60);
       
+      // 4. Parse the resume with AI
       console.log("[ResumeUpload] Step 4: Testing parser function");
       let parsedData = null;
       try {
+        // Test the parser functionality first
         console.log("[ResumeUpload] BEFORE TEST: Invoking parse-resume function with test=true");
         const testResult = await supabase.functions.invoke("parse-resume", {
           method: "POST",
@@ -122,8 +131,10 @@ export const useResumeUpload = (
           console.log("[ResumeUpload] Text sample for parsing:", extractedText.substring(0, 300));
           
           try {
+            // Now actually parse the resume - THIS IS THE GEMINI CALL
             console.log("[ResumeUpload] BEFORE GEMINI: Invoking parse-resume function with actual resume text");
             
+            // Create a proper JSON payload with the resume text
             const geminiPayload = {
               resumeText: extractedText
             };
@@ -131,6 +142,7 @@ export const useResumeUpload = (
             console.log("[ResumeUpload] Gemini payload structure:", Object.keys(geminiPayload));
             console.log("[ResumeUpload] Gemini payload resumeText length:", geminiPayload.resumeText.length);
             
+            // Make sure we're sending proper JSON to the edge function
             const geminiResponse = await supabase.functions.invoke("parse-resume", {
               method: "POST",
               body: geminiPayload
@@ -152,6 +164,7 @@ export const useResumeUpload = (
             parsedData = geminiResponse.data?.data;
             console.log("[ResumeUpload] Successfully parsed resume data from Gemini:", parsedData);
             
+            // Log skills for debugging
             if (parsedData?.extracted_skills?.length > 0) {
               console.log("[ResumeUpload] Extracted skills:", parsedData.extracted_skills);
             } else {
@@ -182,8 +195,10 @@ export const useResumeUpload = (
       }
       setUploadProgress(80);
       
+      // 5. Insert the resume record into the database
       console.log("[ResumeUpload] Step 5: Inserting resume record into database");
       
+      // Define the base resume data object with required fields
       const resumeData: Record<string, any> = {
         user_id: user.id,
         file_name: file.name,
@@ -194,14 +209,17 @@ export const useResumeUpload = (
         resume_text: extractedText,
       };
 
+      // Add parsed fields if available
       if (parsedData) {
         console.log("[ResumeUpload] Adding parsed data to resume record");
         
+        // Add all available fields from the parsed data
         Object.keys(parsedData).forEach(key => {
-          if (key === 'resume_text') return;
+          if (key === 'resume_text') return; // Skip resume_text as we already have it
           
           const value = parsedData[key];
           
+          // Handle objects that need to be stringified
           if (typeof value === 'object' && value !== null && 
               key !== 'extracted_skills' && 
               key !== 'preferred_locations' && key !== 'preferred_companies' && 
@@ -221,6 +239,7 @@ export const useResumeUpload = (
           resume_text: `${resumeData.resume_text?.substring(0, 100)}... (truncated)`
         });
         
+        // Direct supabase insert for debugging
         console.log("[ResumeUpload] BEFORE DB INSERT: Executing direct DB insert...");
         const { data: directData, error: directError } = await supabase
           .from("resumes")
@@ -235,23 +254,6 @@ export const useResumeUpload = (
         }
         
         console.log("[ResumeUpload] Direct DB insert succeeded:", directData);
-        
-        if (directData && directData.length > 0 && extractedText) {
-          console.log("[ResumeUpload] Step 6: Generating embedding for the resume");
-          
-          try {
-            const resumeId = directData[0].id;
-            const embeddingSuccess = await processResumeEmbedding(resumeId, extractedText);
-            
-            if (embeddingSuccess) {
-              console.log("[ResumeUpload] Resume embedding generated and stored successfully");
-            } else {
-              console.error("[ResumeUpload] Failed to generate resume embedding, but proceeding with upload");
-            }
-          } catch (embeddingError) {
-            console.error("[ResumeUpload] Error generating resume embedding:", embeddingError);
-          }
-        }
         
         toast({
           title: "Resume uploaded successfully",
