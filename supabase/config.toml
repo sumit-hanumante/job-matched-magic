@@ -1,5 +1,4 @@
 
-
 [functions]
 [functions.parse-resume]
 verify_jwt = false

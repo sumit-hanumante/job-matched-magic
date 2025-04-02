@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTextExtractor } from "./use-document-text-extractor";
@@ -42,7 +41,6 @@ export const useResumeUpload = (
           await uploadToTempStorage(file);
         } catch (storageError) {
           console.error("[ResumeUpload] Storage error:", storageError);
-          // If we get an RLS policy error, continue with the flow but show a more specific message
           if (storageError.message?.includes('row-level security policy')) {
             toast({
               variant: "destructive",
@@ -95,7 +93,6 @@ export const useResumeUpload = (
         console.log("[ResumeUpload] File uploaded to storage:", publicUrl);
       } catch (storageError) {
         console.error("[ResumeUpload] Storage upload failed:", storageError);
-        // Continue with the process but log the issue
         filePath = `failed-upload-${Date.now()}-${file.name}`;
         toast({
           variant: "destructive",
@@ -110,7 +107,6 @@ export const useResumeUpload = (
       console.log("[ResumeUpload] Step 4: Testing parser function");
       let parsedData = null;
       try {
-        // Test the parser functionality first
         console.log("[ResumeUpload] BEFORE TEST: Invoking parse-resume function with test=true");
         const testResult = await supabase.functions.invoke("parse-resume", {
           method: "POST",
@@ -132,10 +128,8 @@ export const useResumeUpload = (
           console.log("[ResumeUpload] Text sample for parsing:", extractedText.substring(0, 300));
           
           try {
-            // Now actually parse the resume - THIS IS THE GEMINI CALL
             console.log("[ResumeUpload] BEFORE GEMINI: Invoking parse-resume function with actual resume text");
             
-            // Create a proper JSON payload with the resume text
             const geminiPayload = {
               resumeText: extractedText
             };
@@ -143,7 +137,6 @@ export const useResumeUpload = (
             console.log("[ResumeUpload] Gemini payload structure:", Object.keys(geminiPayload));
             console.log("[ResumeUpload] Gemini payload resumeText length:", geminiPayload.resumeText.length);
             
-            // Make sure we're sending proper JSON to the edge function
             const geminiResponse = await supabase.functions.invoke("parse-resume", {
               method: "POST",
               body: geminiPayload
@@ -165,7 +158,6 @@ export const useResumeUpload = (
             parsedData = geminiResponse.data?.data;
             console.log("[ResumeUpload] Successfully parsed resume data from Gemini:", parsedData);
             
-            // Log skills for debugging
             if (parsedData?.extracted_skills?.length > 0) {
               console.log("[ResumeUpload] Extracted skills:", parsedData.extracted_skills);
             } else {
@@ -214,13 +206,11 @@ export const useResumeUpload = (
       if (parsedData) {
         console.log("[ResumeUpload] Adding parsed data to resume record");
         
-        // Add all available fields from the parsed data
         Object.keys(parsedData).forEach(key => {
-          if (key === 'resume_text') return; // Skip resume_text as we already have it
+          if (key === 'resume_text') return;
           
           const value = parsedData[key];
           
-          // Handle objects that need to be stringified
           if (typeof value === 'object' && value !== null && 
               key !== 'extracted_skills' && 
               key !== 'preferred_locations' && key !== 'preferred_companies' && 
@@ -240,7 +230,6 @@ export const useResumeUpload = (
           resume_text: `${resumeData.resume_text?.substring(0, 100)}... (truncated)`
         });
         
-        // Direct supabase insert for debugging
         console.log("[ResumeUpload] BEFORE DB INSERT: Executing direct DB insert...");
         const { data: directData, error: directError } = await supabase
           .from("resumes")
@@ -256,7 +245,6 @@ export const useResumeUpload = (
         
         console.log("[ResumeUpload] Direct DB insert succeeded:", directData);
         
-        // NEW CODE: Generate and store embedding for the resume
         if (directData && directData[0] && directData[0].id && resumeData.resume_text) {
           console.log("[ResumeUpload] Starting embedding generation for resume text...");
           await addResumeEmbedding(
