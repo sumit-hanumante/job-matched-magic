@@ -7,6 +7,7 @@ import Auth from "@/components/Auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "@/hooks/use-toast";
+import TestUserInfo from "@/components/TestUserInfo";
 
 // Lazy load components
 const ResumeUpload = lazy(() => import("@/components/ResumeUpload"));
@@ -87,6 +88,11 @@ const Index = () => {
           <Suspense fallback={renderSkeleton()}>
             <JobList onLoginRequired={() => setShowAuthDialog(true)} />
           </Suspense>
+        </section>
+
+        {/* Test User Info Section */}
+        <section className="max-w-2xl mx-auto">
+          <TestUserInfo />
         </section>
 
         <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
