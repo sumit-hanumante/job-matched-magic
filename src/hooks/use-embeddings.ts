@@ -7,18 +7,22 @@ export interface EmbeddingResponse {
   embeddings?: number[][];
   error?: string;
   processingTime?: number;
+  processedCount?: number;
 }
 
 /**
  * Hook for generating and managing text embeddings using Gemini API
+ * Optimized for both batch processing (jobs) and single processing (resumes)
  */
 export const useEmbeddings = () => {
+  const { toast } = useToast();
+  
   /**
    * Test if the embedding function is working
    */
   const testEmbeddingFunction = async (): Promise<boolean> => {
     try {
-      console.log("Testing embedding function...");
+      console.log("[Embeddings] Testing embedding function...");
       const { data, error } = await supabase.functions.invoke("generate-embeddings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -40,6 +44,7 @@ export const useEmbeddings = () => {
 
   /**
    * Generate embeddings for a batch of texts
+   * Optimized for processing large batches of job descriptions
    * @param texts Array of text strings to generate embeddings for
    * @returns Array of embedding vectors or null on error
    */
@@ -69,6 +74,11 @@ export const useEmbeddings = () => {
       
       if (error) {
         console.error("[Embeddings] Function invocation error:", error);
+        toast({
+          variant: "destructive",
+          title: "Embedding generation failed",
+          description: `Error: ${error.message}`
+        });
         throw error;
       }
       
@@ -77,9 +87,15 @@ export const useEmbeddings = () => {
       if (!data?.success || !data.embeddings) {
         const errorMsg = data?.error || "Failed to generate embeddings";
         console.error("[Embeddings] Error in response:", errorMsg);
+        toast({
+          variant: "destructive",
+          title: "Embedding generation failed",
+          description: errorMsg
+        });
         throw new Error(errorMsg);
       }
       
+      console.log(`[Embeddings] Successfully generated ${data.embeddings.length} embeddings in ${data.processingTime}ms`);
       return data.embeddings;
     } catch (error) {
       console.error("[Embeddings] Error generating embeddings:", error);
@@ -89,6 +105,7 @@ export const useEmbeddings = () => {
 
   /**
    * Generate a single embedding from text
+   * Used for immediate processing of resume uploads
    * @param text Text to generate embedding for
    * @returns Embedding vector or null on error
    */
@@ -104,9 +121,53 @@ export const useEmbeddings = () => {
     return embeddings ? embeddings[0] : null;
   };
   
+  /**
+   * Process a resume by generating and storing its embedding
+   * Called immediately after a resume is uploaded and parsed
+   * @param resumeId ID of the resume to process
+   * @param resumeText Text of the resume
+   * @returns Boolean indicating success
+   */
+  const processResumeEmbedding = async (resumeId: string, resumeText: string): Promise<boolean> => {
+    try {
+      console.log(`[ResumeEmbedding] Processing embedding for resume ${resumeId}`);
+      
+      if (!resumeText || resumeText.trim().length === 0) {
+        console.error("[ResumeEmbedding] Empty resume text");
+        return false;
+      }
+      
+      // Generate embedding
+      const embedding = await generateSingleEmbedding(resumeText);
+      
+      if (!embedding) {
+        console.error("[ResumeEmbedding] Failed to generate embedding");
+        return false;
+      }
+      
+      // Store embedding in the database
+      const { error: updateError } = await supabase
+        .from('resumes')
+        .update({ embedding })
+        .eq('id', resumeId);
+      
+      if (updateError) {
+        console.error("[ResumeEmbedding] Failed to update resume with embedding:", updateError);
+        return false;
+      }
+      
+      console.log(`[ResumeEmbedding] Successfully updated resume ${resumeId} with embedding`);
+      return true;
+    } catch (error) {
+      console.error("[ResumeEmbedding] Error processing resume embedding:", error);
+      return false;
+    }
+  };
+  
   return {
     testEmbeddingFunction,
     generateEmbeddings,
-    generateSingleEmbedding
+    generateSingleEmbedding,
+    processResumeEmbedding
   };
 };
