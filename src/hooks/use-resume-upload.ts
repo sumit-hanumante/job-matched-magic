@@ -6,6 +6,7 @@ import { useStorageService } from "./use-storage-service";
 import { useResumeParser } from "./use-resume-parser";
 import { useResumeDatabase } from "./use-resume-database";
 import { supabase } from "@/lib/supabase";
+import { addResumeEmbedding } from "@/lib/embedding-utils";
 
 export const useResumeUpload = (
   user: any,
@@ -254,6 +255,16 @@ export const useResumeUpload = (
         }
         
         console.log("[ResumeUpload] Direct DB insert succeeded:", directData);
+        
+        // NEW CODE: Generate and store embedding for the resume
+        if (directData && directData[0] && directData[0].id && resumeData.resume_text) {
+          console.log("[ResumeUpload] Starting embedding generation for resume text...");
+          await addResumeEmbedding(
+            resumeData.resume_text, 
+            user.id,
+            directData[0].id
+          );
+        }
         
         toast({
           title: "Resume uploaded successfully",

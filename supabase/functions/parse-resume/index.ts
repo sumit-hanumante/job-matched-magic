@@ -28,7 +28,7 @@ serve(async (req) => {
       throw new Error(`Invalid or empty request body: ${parseError.message}`);
     }
     
-    const { resumeText, test } = parsedBody;
+    const { resumeText, test, generateEmbedding } = parsedBody;
     
     // Handle test requests
     if (test === true) {
