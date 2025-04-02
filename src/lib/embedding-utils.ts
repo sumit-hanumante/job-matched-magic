@@ -1,3 +1,4 @@
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from "@/lib/supabase";
 
@@ -32,10 +33,11 @@ export async function addResumeEmbedding(resumeText: string, userId: string, res
       ? resumeText.substring(0, 25000)  // Limit length if needed
       : resumeText;
     
-    const embeddingResponse = await ai.embedContent({
-      model: "embedding-001", // Use the text embedding model
-      content: contentForEmbedding,
-    });
+    // Get the embedding model
+    const embeddingModel = ai.getGenerativeModel({ model: "embedding-001" });
+    
+    // Generate embedding using the correct API method
+    const embeddingResponse = await embeddingModel.embedContent(contentForEmbedding);
     
     const embedding = embeddingResponse.embedding?.values;
     
