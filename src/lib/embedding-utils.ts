@@ -1,4 +1,3 @@
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from "@/lib/supabase";
 
@@ -19,14 +18,14 @@ export async function addResumeEmbedding(resumeText: string, userId: string, res
     }
     
     // 1. Get embedding from Google
-    const apiKey = process.env.GEMINI_API_KEY || ""; // Use environment variable 
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
     if (!apiKey) {
       console.error("[EmbeddingUtils] Missing GEMINI_API_KEY environment variable");
       return;
     }
 
     const ai = new GoogleGenerativeAI(apiKey);
-    console.log("[EmbeddingUtils] Calling Google AI for embedding...");
+    console.log("[EmbeddingUtils] Calling Google AI for embedding with API key length:", apiKey.length);
     
     // Prepare content for embedding - trim if needed
     const contentForEmbedding = resumeText.length > 25000 
@@ -35,9 +34,11 @@ export async function addResumeEmbedding(resumeText: string, userId: string, res
     
     // Get the embedding model
     const embeddingModel = ai.getGenerativeModel({ model: "embedding-001" });
+    console.log("[EmbeddingUtils] Using embedding model:", "embedding-001");
     
     // Generate embedding using the correct API method
     const embeddingResponse = await embeddingModel.embedContent(contentForEmbedding);
+    console.log("[EmbeddingUtils] Embedding response received");
     
     const embedding = embeddingResponse.embedding?.values;
     
@@ -51,6 +52,7 @@ export async function addResumeEmbedding(resumeText: string, userId: string, res
     // 2. Save to database
     if (resumeId) {
       // If we have the specific resume ID, use it
+      console.log(`[EmbeddingUtils] Updating resume with ID ${resumeId} with embedding`);
       const { data, error } = await supabase
         .from("resumes")
         .update({ embedding: embedding })
@@ -60,10 +62,11 @@ export async function addResumeEmbedding(resumeText: string, userId: string, res
       if (error) {
         console.error("[EmbeddingUtils] Failed to update resume with embedding:", error);
       } else {
-        console.log("[EmbeddingUtils] Successfully updated resume with embedding");
+        console.log("[EmbeddingUtils] Successfully updated resume with embedding:", data);
       }
     } else {
       // Otherwise get the most recent resume for this user
+      console.log(`[EmbeddingUtils] Finding most recent resume for user ${userId}`);
       const { data, error } = await supabase
         .from("resumes")
         .update({ embedding: embedding })
@@ -73,10 +76,15 @@ export async function addResumeEmbedding(resumeText: string, userId: string, res
       if (error) {
         console.error("[EmbeddingUtils] Failed to update resume with embedding:", error);
       } else {
-        console.log("[EmbeddingUtils] Successfully updated resume with embedding");
+        console.log("[EmbeddingUtils] Successfully updated resume with embedding:", data);
       }
     }
   } catch (error) {
     console.error("[EmbeddingUtils] Embedding generation failed:", error);
+    console.error("[EmbeddingUtils] Error details:", error instanceof Error ? {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    } : String(error));
   }
 }

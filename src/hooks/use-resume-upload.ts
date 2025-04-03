@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTextExtractor } from "./use-document-text-extractor";
@@ -247,11 +248,22 @@ export const useResumeUpload = (
         
         if (directData && directData[0] && directData[0].id && resumeData.resume_text) {
           console.log("[ResumeUpload] Starting embedding generation for resume text...");
-          await addResumeEmbedding(
-            resumeData.resume_text, 
-            user.id,
-            directData[0].id
-          );
+          try {
+            await addResumeEmbedding(
+              resumeData.resume_text, 
+              user.id,
+              directData[0].id
+            );
+            console.log("[ResumeUpload] Embedding generation completed");
+          } catch (embeddingError) {
+            console.error("[ResumeUpload] Embedding generation failed:", embeddingError);
+          }
+        } else {
+          console.error("[ResumeUpload] Missing data for embedding generation:", {
+            hasDirectData: !!directData,
+            hasResumeId: directData && directData[0] ? !!directData[0].id : false,
+            hasResumeText: !!resumeData.resume_text,
+          });
         }
         
         toast({
