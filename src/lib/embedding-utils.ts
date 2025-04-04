@@ -18,30 +18,11 @@ export async function addResumeEmbedding(
       return;
     }
 
-    // Get API key from the correct source
-    // For browser environments, we need to access environment variables differently than in Deno
-    let geminiApiKey;
-    
-    try {
-      // First try to get from Supabase edge function environment
-      const { data: secretData, error: secretError } = await supabase.functions.invoke("generate-embedding", {
-        method: "POST",
-        body: { test: true }
-      });
-      
-      if (secretError) {
-        console.warn("[Embedding] Could not retrieve API key from edge function, will check for direct access");
-      } else if (secretData?.apiKeyAvailable) {
-        console.log("[Embedding] API key is available in edge function");
-        return await generateEmbeddingWithEdgeFunction(resumeText, userId, resumeId);
-      }
-    } catch (edgeFunctionError) {
-      console.warn("[Embedding] Edge function test failed:", edgeFunctionError);
-    }
-    
-    // Fallback to direct environment variables if available in the browser context
-    geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    
+    // Get API key from environment
+    const geminiApiKey = process.env.GEMINI_API_KEY || 
+                         process.env.VITE_GEMINI_API_KEY || 
+                         process.env.REACT_APP_GEMINI_API_KEY;
+                         
     if (!geminiApiKey) {
       console.error("[Embedding] Error: Missing GEMINI_API_KEY environment variable");
       return;
@@ -78,31 +59,5 @@ export async function addResumeEmbedding(
 
   } catch (error) {
     console.error("[Embedding] Critical error:", error instanceof Error ? error.message : "Unknown error");
-  }
-}
-
-// Helper function to generate embeddings using an edge function
-async function generateEmbeddingWithEdgeFunction(
-  resumeText: string,
-  userId: string,
-  resumeId?: string
-) {
-  try {
-    console.log("[Embedding] Generating embedding via edge function");
-    
-    const { data, error } = await supabase.functions.invoke("generate-embedding", {
-      method: "POST",
-      body: { resumeText, userId, resumeId }
-    });
-    
-    if (error) {
-      console.error("[Embedding] Edge function error:", error);
-      return;
-    }
-    
-    console.log("[Embedding] Edge function result:", data);
-    return data;
-  } catch (error) {
-    console.error("[Embedding] Edge function call failed:", error);
   }
 }
