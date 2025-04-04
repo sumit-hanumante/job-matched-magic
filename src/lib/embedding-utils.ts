@@ -8,8 +8,8 @@ export async function addResumeEmbedding(
 ) {
   try {
     // Log that we're about to process the resume
-    console.log(`[Embedding] Resume text (${resumeText.length} chars) is being processed for user ${userId}${resumeId ? ` and resume ${resumeId}` : ''}`);
-    console.log(`[Embedding] Resume preview: "${resumeText.substring(0, 100)}..."`);
+    console.log(`[Embedding] Starting embedding generation for user ${userId}${resumeId ? ` and resume ${resumeId}` : ''}`);
+    console.log(`[Embedding] Resume text length: ${resumeText.length} chars`);
     
     // Validate input
     if (!resumeText || resumeText.length < 50) {
@@ -19,18 +19,37 @@ export async function addResumeEmbedding(
 
     // Call the edge function to generate embedding
     console.log(`[Embedding] Calling generate-embedding edge function`);
+    
+    // Prepare the payload - making sure to provide all required parameters
+    const payload = { 
+      resumeText, 
+      userId, 
+      resumeId 
+    };
+    
+    console.log(`[Embedding] Payload prepared:`, {
+      userId,
+      resumeId: resumeId || 'not provided',
+      textLength: resumeText.length
+    });
+    
     const { data, error: functionError } = await supabase.functions.invoke("generate-embedding", {
       method: "POST",
-      body: { resumeText, userId, resumeId }
+      body: payload
     });
 
     if (functionError) {
-      console.error(`[Embedding] Edge function error: ${functionError.message}`);
+      console.error(`[Embedding] Edge function error:`, functionError);
+      return;
+    }
+    
+    if (!data) {
+      console.error(`[Embedding] Edge function returned no data`);
       return;
     }
 
-    if (!data?.success || !data?.embedding) {
-      console.error(`[Embedding] Edge function returned error or no embedding`);
+    if (!data.success || !data.embedding) {
+      console.error(`[Embedding] Edge function returned error or no embedding:`, data);
       return;
     }
 
@@ -41,21 +60,39 @@ export async function addResumeEmbedding(
     const updateData = {
       embedding
     };
+    
+    console.log(`[Embedding] Updating database for ${resumeId ? 'resume ID: ' + resumeId : 'user ID: ' + userId}`);
 
     // Update database
-    const { error } = await supabase
-      .from('resumes')
-      .update(updateData)
-      .eq(resumeId ? 'id' : 'user_id', resumeId || userId);
+    if (resumeId) {
+      const { error } = await supabase
+        .from('resumes')
+        .update(updateData)
+        .eq('id', resumeId);
 
-    if (error) {
-      console.error(`[Embedding] Database update failed: ${error.message}`);
-      return;
+      if (error) {
+        console.error(`[Embedding] Database update failed for resume ${resumeId}:`, error);
+        return;
+      }
+      
+      console.log(`[Embedding] Successfully updated embedding for resume ${resumeId}`);
+    } else {
+      const { error } = await supabase
+        .from('resumes')
+        .update(updateData)
+        .eq('user_id', userId)
+        .eq('order_index', 1); // Update the primary resume
+        
+      if (error) {
+        console.error(`[Embedding] Database update failed for user ${userId}:`, error);
+        return;
+      }
+      
+      console.log(`[Embedding] Successfully updated embedding for user ${userId}`);
     }
 
-    console.log(`[Embedding] Successfully updated embedding for ${resumeId || userId}`);
-
   } catch (error) {
-    console.error("[Embedding] Critical error:", error instanceof Error ? error.message : "Unknown error");
+    console.error("[Embedding] Critical error:", error instanceof Error ? 
+      {message: error.message, stack: error.stack} : "Unknown error");
   }
 }
