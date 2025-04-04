@@ -11,6 +11,9 @@ import { supabase } from "@/lib/supabase";
 export async function addResumeEmbedding(resumeText: string, userId: string, resumeId?: string) {
   try {
     console.log("[EmbeddingUtils] Starting embedding generation for resume...");
+    console.log("[EmbeddingUtils] User ID:", userId);
+    console.log("[EmbeddingUtils] Resume ID:", resumeId || "Not provided");
+    console.log("[EmbeddingUtils] Resume text length:", resumeText.length);
 
     if (!resumeText || resumeText.length < 10) {
       console.error("[EmbeddingUtils] Resume text is too short for embedding");
@@ -32,52 +35,92 @@ export async function addResumeEmbedding(resumeText: string, userId: string, res
       ? resumeText.substring(0, 25000)  // Limit length if needed
       : resumeText;
     
-    // Get the embedding model
-    const embeddingModel = ai.getGenerativeModel({ model: "embedding-001" });
-    console.log("[EmbeddingUtils] Using embedding model:", "embedding-001");
+    console.log("[EmbeddingUtils] Content prepared for embedding, length:", contentForEmbedding.length);
     
-    // Generate embedding using the correct API method
-    const embeddingResponse = await embeddingModel.embedContent(contentForEmbedding);
-    console.log("[EmbeddingUtils] Embedding response received");
-    
-    const embedding = embeddingResponse.embedding?.values;
-    
-    if (!embedding || embedding.length === 0) {
-      console.error("[EmbeddingUtils] Failed to generate embedding - empty response");
-      return;
-    }
-    
-    console.log(`[EmbeddingUtils] Successfully generated embedding with ${embedding.length} dimensions`);
-    
-    // 2. Save to database
-    if (resumeId) {
-      // If we have the specific resume ID, use it
-      console.log(`[EmbeddingUtils] Updating resume with ID ${resumeId} with embedding`);
-      const { data, error } = await supabase
-        .from("resumes")
-        .update({ embedding: embedding })
-        .eq("id", resumeId)
-        .eq("user_id", userId);
+    try {
+      // Get the embedding model
+      const embeddingModel = ai.getGenerativeModel({ model: "embedding-001" });
+      console.log("[EmbeddingUtils] Using embedding model:", "embedding-001");
       
-      if (error) {
-        console.error("[EmbeddingUtils] Failed to update resume with embedding:", error);
-      } else {
-        console.log("[EmbeddingUtils] Successfully updated resume with embedding:", data);
-      }
-    } else {
-      // Otherwise get the most recent resume for this user
-      console.log(`[EmbeddingUtils] Finding most recent resume for user ${userId}`);
-      const { data, error } = await supabase
-        .from("resumes")
-        .update({ embedding: embedding })
-        .eq("user_id", userId)
-        .eq("order_index", 1); // Get the primary resume
+      // Generate embedding using the correct API method
+      console.log("[EmbeddingUtils] Calling embedContent method...");
+      const embeddingResponse = await embeddingModel.embedContent(contentForEmbedding);
+      console.log("[EmbeddingUtils] Embedding response received:", embeddingResponse);
       
-      if (error) {
-        console.error("[EmbeddingUtils] Failed to update resume with embedding:", error);
-      } else {
-        console.log("[EmbeddingUtils] Successfully updated resume with embedding:", data);
+      const embedding = embeddingResponse.embedding?.values;
+      
+      if (!embedding || embedding.length === 0) {
+        console.error("[EmbeddingUtils] Failed to generate embedding - empty response");
+        return;
       }
+      
+      console.log(`[EmbeddingUtils] Successfully generated embedding with ${embedding.length} dimensions`);
+      console.log("[EmbeddingUtils] First few values:", embedding.slice(0, 5));
+      
+      // 2. Save to database
+      if (resumeId) {
+        // If we have the specific resume ID, use it
+        console.log(`[EmbeddingUtils] Updating resume with ID ${resumeId} with embedding`);
+        
+        try {
+          const { data, error } = await supabase
+            .from("resumes")
+            .update({ embedding: embedding })
+            .eq("id", resumeId)
+            .eq("user_id", userId);
+          
+          console.log("[EmbeddingUtils] DB update query executed");
+          
+          if (error) {
+            console.error("[EmbeddingUtils] Failed to update resume with embedding:", error);
+            console.error("[EmbeddingUtils] Error details:", JSON.stringify(error));
+          } else {
+            console.log("[EmbeddingUtils] Successfully updated resume with embedding, rows affected:", data);
+          }
+          
+          // Verify the update worked by fetching the resume again
+          const { data: verifyData, error: verifyError } = await supabase
+            .from("resumes")
+            .select("id, embedding")
+            .eq("id", resumeId)
+            .single();
+            
+          if (verifyError) {
+            console.error("[EmbeddingUtils] Failed to verify embedding update:", verifyError);
+          } else {
+            const hasEmbedding = verifyData && verifyData.embedding !== null;
+            console.log("[EmbeddingUtils] Verification - embedding exists in DB:", hasEmbedding);
+          }
+        } catch (dbError) {
+          console.error("[EmbeddingUtils] Database error during update:", dbError);
+        }
+      } else {
+        // Otherwise get the most recent resume for this user
+        console.log(`[EmbeddingUtils] Finding most recent resume for user ${userId}`);
+        try {
+          const { data, error } = await supabase
+            .from("resumes")
+            .update({ embedding: embedding })
+            .eq("user_id", userId)
+            .eq("order_index", 1); // Get the primary resume
+          
+          if (error) {
+            console.error("[EmbeddingUtils] Failed to update resume with embedding:", error);
+            console.error("[EmbeddingUtils] Error details:", JSON.stringify(error));
+          } else {
+            console.log("[EmbeddingUtils] Successfully updated resume with embedding, rows affected:", data);
+          }
+        } catch (dbError) {
+          console.error("[EmbeddingUtils] Database error during update:", dbError);
+        }
+      }
+    } catch (apiError) {
+      console.error("[EmbeddingUtils] Error during API call to Google AI:", apiError);
+      console.error("[EmbeddingUtils] API Error details:", apiError instanceof Error ? {
+        name: apiError.name,
+        message: apiError.message,
+        stack: apiError.stack
+      } : String(apiError));
     }
   } catch (error) {
     console.error("[EmbeddingUtils] Embedding generation failed:", error);
