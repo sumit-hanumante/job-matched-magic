@@ -1,5 +1,4 @@
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from "@/lib/supabase";
 
 export async function addResumeEmbedding(
@@ -18,26 +17,25 @@ export async function addResumeEmbedding(
       return;
     }
 
-    // Get API key from environment
-    const geminiApiKey = process.env.GEMINI_API_KEY || 
-                         process.env.VITE_GEMINI_API_KEY || 
-                         process.env.REACT_APP_GEMINI_API_KEY;
-                         
-    if (!geminiApiKey) {
-      console.error("[Embedding] Error: Missing GEMINI_API_KEY environment variable");
+    // Call the edge function to generate embedding
+    console.log(`[Embedding] Calling generate-embedding edge function`);
+    const { data, error: functionError } = await supabase.functions.invoke("generate-embedding", {
+      method: "POST",
+      body: { resumeText, userId, resumeId }
+    });
+
+    if (functionError) {
+      console.error(`[Embedding] Edge function error: ${functionError.message}`);
       return;
     }
 
-    // Initialize AI client
-    const ai = new GoogleGenerativeAI(geminiApiKey);
-    const model = ai.getGenerativeModel({ 
-      model: "text-embedding-004" // Updated to latest embedding model
-    });
+    if (!data?.success || !data?.embedding) {
+      console.error(`[Embedding] Edge function returned error or no embedding`);
+      return;
+    }
 
-    // Generate embedding
-    console.log(`[Embedding] Starting embedding generation for user ${userId}`);
-    const result = await model.embedContent(resumeText);
-    const embedding = result.embedding.values;
+    const embedding = data.embedding;
+    console.log(`[Embedding] Successfully received embedding with ${embedding.length} dimensions`);
 
     // Prepare update data
     const updateData = {
