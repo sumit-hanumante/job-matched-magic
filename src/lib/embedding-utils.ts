@@ -21,10 +21,41 @@ export async function addResumeEmbedding(resumeText: string, userId: string, res
       return;
     }
     
-    // 1. Check for API key
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
+    // Check for API key - Check BOTH NEXT_PUBLIC_GEMINI_API_KEY and GEMINI_API_KEY
+    // Log all available environment variables to debug
+    console.log("[EmbeddingUtils] All available environment variable names:", 
+                Object.keys(process.env).filter(key => key.includes('GEMINI')));
+    
+    // Try different key naming patterns that might be used in the parse-resume function
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 
+                  process.env.GEMINI_API_KEY || 
+                  Deno?.env?.get?.('GEMINI_API_KEY') || 
+                  Deno?.env?.get?.('NEXT_PUBLIC_GEMINI_API_KEY') || 
+                  process.env.GEMINI_KEY || 
+                  "";
+                  
+    console.log("[EmbeddingUtils] Trying to find API key with various names");
+    console.log("[EmbeddingUtils] Has NEXT_PUBLIC_GEMINI_API_KEY:", !!process.env.NEXT_PUBLIC_GEMINI_API_KEY);
+    console.log("[EmbeddingUtils] Has GEMINI_API_KEY:", !!process.env.GEMINI_API_KEY);
+    console.log("[EmbeddingUtils] Has Deno.env GEMINI_API_KEY:", !!Deno?.env?.get?.('GEMINI_API_KEY'));
+    
     if (!apiKey) {
-      console.error("[EmbeddingUtils] Missing GEMINI_API_KEY environment variable");
+      console.error("[EmbeddingUtils] Missing GEMINI API KEY - Could not find key with any common name patterns");
+      
+      // Let's find what key name is used in the parse-resume function
+      console.log("[EmbeddingUtils] Checking for parse-resume function to debug key name...");
+      
+      try {
+        console.log("[EmbeddingUtils] Testing parse-resume function to see what key it uses");
+        const { data: testData } = await supabase.functions.invoke("parse-resume", {
+          method: "POST",
+          body: { test: true }
+        });
+        console.log("[EmbeddingUtils] Parse-resume test response:", testData);
+      } catch (testError) {
+        console.error("[EmbeddingUtils] Parse-resume test error:", testError);
+      }
+      
       return;
     }
 
