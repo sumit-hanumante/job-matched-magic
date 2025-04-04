@@ -19,7 +19,6 @@ export const useResumeUpload = (
   const { parseResumeText } = useResumeParser();
   const { shiftOlderResumes, insertResume } = useResumeDatabase();
 
-  // Main function to upload resume.
   const uploadResume = async (file: File) => {
     if (!file) return false;
     
@@ -33,7 +32,6 @@ export const useResumeUpload = (
         size: Math.round(file.size / 1024) + " KB",
       });
 
-      // --- UNAUTHENTICATED FLOW ---
       if (!user) {
         console.log("[ResumeUpload] User not authenticated, performing unauthenticated flow");
         
@@ -63,10 +61,8 @@ export const useResumeUpload = (
         return false;
       }
 
-      // --- AUTHENTICATED FLOW ---
       console.log(`[ResumeUpload] Beginning authenticated flow for user ID: ${user.id}`);
       
-      // 1. Extract text from the file first, to ensure we can process it
       console.log("[ResumeUpload] Step 1: Extracting text from file");
       setUploadProgress(20);
       const extractedText = await extractTextFromFile(file);
@@ -78,13 +74,11 @@ export const useResumeUpload = (
       console.log("[ResumeUpload] Text sample:", extractedText.substring(0, 200));
       setUploadProgress(30);
       
-      // 2. Shift older resumes to maintain order
       console.log("[ResumeUpload] Step 2: Shifting older resumes");
       await shiftOlderResumes(user.id);
       console.log("[ResumeUpload] Resume shifting completed");
       setUploadProgress(40);
       
-      // 3. Upload the file to storage
       console.log("[ResumeUpload] Step 3: Uploading file to storage");
       let filePath;
       try {
@@ -103,7 +97,6 @@ export const useResumeUpload = (
       
       setUploadProgress(60);
       
-      // 4. Parse the resume with AI
       console.log("[ResumeUpload] Step 4: Testing parser function");
       let parsedData = null;
       try {
@@ -188,10 +181,8 @@ export const useResumeUpload = (
       }
       setUploadProgress(80);
       
-      // 5. Insert the resume record into the database
       console.log("[ResumeUpload] Step 5: Inserting resume record into database");
       
-      // Define the base resume data object with required fields
       const resumeData: Record<string, any> = {
         user_id: user.id,
         file_name: file.name,
@@ -202,10 +193,7 @@ export const useResumeUpload = (
         resume_text: extractedText,
       };
 
-      // Add parsed fields if available
       if (parsedData) {
-        console.log("[ResumeUpload] Adding parsed data to resume record");
-        
         Object.keys(parsedData).forEach(key => {
           if (key === 'resume_text') return;
           
@@ -220,8 +208,6 @@ export const useResumeUpload = (
             resumeData[key] = value;
           }
         });
-        
-        console.log("[ResumeUpload] Parsed data keys being added:", Object.keys(parsedData));
       }
 
       try {
@@ -246,7 +232,7 @@ export const useResumeUpload = (
         console.log("[ResumeUpload] Direct DB insert succeeded:", directData);
         
         if (directData && directData[0] && directData[0].id && resumeData.resume_text) {
-          console.log("[ResumeUpload] Starting embedding generation for resume text...");
+          console.log("[ResumeUpload] TESTING EMBEDDING: About to call embedding function");
           console.log("[ResumeUpload] Resume ID for embedding:", directData[0].id);
           console.log("[ResumeUpload] User ID for embedding:", user.id);
           console.log("[ResumeUpload] Resume text length for embedding:", resumeData.resume_text.length);
@@ -257,9 +243,9 @@ export const useResumeUpload = (
               user.id,
               directData[0].id
             );
-            console.log("[ResumeUpload] Embedding generation completed");
+            console.log("[ResumeUpload] Embedding function call completed");
           } catch (embeddingError) {
-            console.error("[ResumeUpload] Embedding generation failed:", embeddingError);
+            console.error("[ResumeUpload] Embedding function call failed:", embeddingError);
             console.error("[ResumeUpload] Error details:", embeddingError instanceof Error ? {
               name: embeddingError.name,
               message: embeddingError.message,
