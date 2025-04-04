@@ -1,4 +1,5 @@
 
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from "@/lib/supabase";
 
 export async function addResumeEmbedding(
@@ -17,24 +18,44 @@ export async function addResumeEmbedding(
       return;
     }
 
-    // Call the Supabase Edge Function to generate embeddings
-    console.log(`[Embedding] Calling generate-embedding function for user ${userId}`);
-    
-    const { data, error } = await supabase.functions.invoke("generate-embedding", {
-      method: "POST",
-      body: {
-        resumeText,
-        userId,
-        resumeId
-      }
-    });
-
-    if (error) {
-      console.error(`[Embedding] Edge function call failed: ${error.message}`);
+    // Get API key from environment
+    const geminiApiKey = process.env.GEMINI_API_KEY || 
+                         process.env.VITE_GEMINI_API_KEY || 
+                         process.env.REACT_APP_GEMINI_API_KEY;
+                         
+    if (!geminiApiKey) {
+      console.error("[Embedding] Error: Missing GEMINI_API_KEY environment variable");
       return;
     }
 
-    console.log(`[Embedding] Edge function response:`, data);
+    // Initialize AI client
+    const ai = new GoogleGenerativeAI(geminiApiKey);
+    const model = ai.getGenerativeModel({ 
+      model: "text-embedding-004" // Updated to latest embedding model
+    });
+
+    // Generate embedding
+    console.log(`[Embedding] Starting embedding generation for user ${userId}`);
+    const result = await model.embedContent(resumeText);
+    const embedding = result.embedding.values;
+
+    // Prepare update data
+    const updateData = {
+      embedding
+    };
+
+    // Update database
+    const { error } = await supabase
+      .from('resumes')
+      .update(updateData)
+      .eq(resumeId ? 'id' : 'user_id', resumeId || userId);
+
+    if (error) {
+      console.error(`[Embedding] Database update failed: ${error.message}`);
+      return;
+    }
+
+    console.log(`[Embedding] Successfully updated embedding for ${resumeId || userId}`);
 
   } catch (error) {
     console.error("[Embedding] Critical error:", error instanceof Error ? error.message : "Unknown error");
