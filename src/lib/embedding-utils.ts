@@ -8,10 +8,6 @@ export async function addResumeEmbedding(
   resumeId?: string
 ) {
   try {
-    // Log that we're about to process the resume
-    console.log(`[Embedding] Resume text (${resumeText.length} chars) is being processed for user ${userId}${resumeId ? ` and resume ${resumeId}` : ''}`);
-    console.log(`[Embedding] Resume preview: "${resumeText.substring(0, 100)}..."`);
-    
     // Validate input
     if (!resumeText || resumeText.length < 50) {
       console.error("[Embedding] Error: Resume text is too short");
@@ -19,10 +15,7 @@ export async function addResumeEmbedding(
     }
 
     // Get API key from environment
-    const geminiApiKey = process.env.GEMINI_API_KEY || 
-                         process.env.VITE_GEMINI_API_KEY || 
-                         process.env.REACT_APP_GEMINI_API_KEY;
-                         
+    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiApiKey) {
       console.error("[Embedding] Error: Missing GEMINI_API_KEY environment variable");
       return;
