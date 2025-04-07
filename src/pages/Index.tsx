@@ -7,7 +7,6 @@ import Auth from "@/components/Auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "@/hooks/use-toast";
-import TestUserInfo from "@/components/TestUserInfo";
 
 // Lazy load components
 const ResumeUpload = lazy(() => import("@/components/ResumeUpload"));
@@ -90,11 +89,6 @@ const Index = () => {
           </Suspense>
         </section>
 
-        {/* Test User Info Section */}
-        <section className="max-w-2xl mx-auto">
-          <TestUserInfo />
-        </section>
-
         <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -119,3 +113,4 @@ const Index = () => {
 };
 
 export default Index;
+
